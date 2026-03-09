@@ -80,3 +80,4 @@ models/*
 outputs/*
 outputs/metrics/bertopic_metrics.json
 outputs/metrics/lda_metrics.json
+.DS_Store

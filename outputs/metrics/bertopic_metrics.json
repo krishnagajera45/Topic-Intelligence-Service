@@ -44,15 +44,33 @@
       "num_topics": 78,
       "timestamp": "2026-02-19T14:12:41.470101",
       "training_time_seconds": 7793.8220410346985
+    },
+    {
+      "batch_id": "batch_20171001_0025_to_20171001_0030",
+      "coherence_c_v": 0.8033201235447422,
+      "diversity": 0.8516304347826087,
+      "silhouette_score": 0.02766098454594612,
+      "num_topics": 82,
+      "timestamp": "2026-02-25T12:03:31.862435",
+      "training_time_seconds": 436.8464651107788
+    },
+    {
+      "batch_id": "batch_20171001_0030_to_20171001_0035",
+      "coherence_c_v": 0.7498590348989133,
+      "diversity": 0.8451162790697675,
+      "silhouette_score": 0.013290277682244778,
+      "num_topics": 91,
+      "timestamp": "2026-02-25T17:14:54.923870",
+      "training_time_seconds": 548.8015542030334
     }
   ],
   "latest": {
-    "coherence_c_v": 0.7929908182393732,
-    "silhouette_score": 0.03657739609479904,
-    "num_topics": 78,
-    "diversity": 0.8658227848101265,
-    "batch_id": "batch_20171001_0020_to_20171001_0025",
-    "timestamp": "2026-02-19T14:12:41.470101",
-    "training_time_seconds": 7793.8220410346985
+    "coherence_c_v": 0.7498590348989133,
+    "silhouette_score": 0.013290277682244778,
+    "num_topics": 91,
+    "diversity": 0.8451162790697675,
+    "batch_id": "batch_20171001_0030_to_20171001_0035",
+    "timestamp": "2026-02-25T17:14:54.923870",
+    "training_time_seconds": 548.8015542030334
   }
 }

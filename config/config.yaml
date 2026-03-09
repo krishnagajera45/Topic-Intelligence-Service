@@ -64,10 +64,19 @@ dashboard:
   api_base_url: "http://localhost:8000"
 
 lda:
-  enabled: true  # Enable/disable LDA comparison
+  enabled: true  # Enable/disable LDA comparison (baseline 1)
   num_topics: auto  # 'auto' uses BERTopic's topic count, or specify a number
   passes: 10  # Number of passes through corpus
   iterations: 200  # Iterations per pass
+  top_n_words: 10  # Top words per topic for evaluation
+
+nmf:
+  enabled: true  # Enable/disable NMF comparison (baseline 2 — matrix factorisation)
+  num_topics: auto  # 'auto' uses BERTopic's topic count, or specify a fixed number
+  max_iter: 400  # Max solver iterations (sklearn NMF)
+  alpha_W: 0.1  # L1 regularisation weight for document-topic matrix W
+  alpha_H: 0.1  # L1 regularisation weight for topic-word matrix H
+  max_features: 5000  # TF-IDF vocabulary size cap
   top_n_words: 10  # Top words per topic for evaluation
 
 scheduler:

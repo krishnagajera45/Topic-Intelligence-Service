@@ -10,6 +10,7 @@ import pandas as pd
 from src.etl.flows.data_ingestion import data_ingestion_flow
 from src.etl.flows.bertopic_modeling import bertopic_modeling_flow
 from src.etl.flows.lda_comparison import lda_comparison_flow
+from src.etl.flows.nmf_comparison import nmf_comparison_flow
 from src.etl.flows.drift_detection import drift_detection_flow
 from src.utils import load_config, generate_batch_id, MLflowLogger, get_prefect_context
 from src.utils import StorageManager
@@ -239,9 +240,73 @@ def complete_pipeline_flow(
             mlflow_logger.log_processing_time("lda_modeling", step3_duration)
         else:
             logger.info("Step 3: LDA modeling disabled in config")
-        
+
+        # ========== STEP 3b: NMF MODELING (Optional) ==========
+        step3b_start = time.time()
+        nmf_metrics = None
+
+        nmf_enabled = getattr(config, 'nmf', None) and getattr(config.nmf, 'enabled', False)
+
+        if nmf_enabled:
+            logger.info("Step 3b: Running NMF modeling flow (cumulative corpus — same scope as LDA / BERTopic)")
+            try:
+                # NMF uses the same cumulative corpus as LDA for a fair three-way comparison
+                corpus_path = Path(config.storage.current_model_path).parent / (
+                    Path(config.storage.current_model_path).stem + "_corpus.json"
+                )
+                nmf_documents = documents
+                if corpus_path.exists():
+                    try:
+                        with open(corpus_path) as f:
+                            nmf_documents = json.load(f)
+                        logger.info(
+                            f"NMF using cumulative corpus: {len(nmf_documents)} docs"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not load cumulative corpus for NMF: {e} — using current batch")
+
+                # Align topic count with BERTopic (same as LDA)
+                nmf_num_topics = getattr(config.nmf, 'num_topics', None)
+                if nmf_num_topics is None or nmf_num_topics == 'auto':
+                    bertopic_num_topics = len(set(topics)) - (1 if -1 in topics else 0)
+                    nmf_num_topics = max(bertopic_num_topics, 5)
+                logger.info(
+                    f"Training NMF with {nmf_num_topics} topics on cumulative corpus"
+                )
+
+                nmf_metrics = nmf_comparison_flow(
+                    documents=nmf_documents,
+                    num_topics=nmf_num_topics,
+                    batch_id=batch_id,
+                    window_start=start_date,
+                    window_end=end_date,
+                )
+
+                if nmf_metrics.get('status') == 'success':
+                    mlflow_logger.log_metrics({
+                        'nmf_coherence_c_v':        nmf_metrics.get('coherence_c_v', 0.0),
+                        'nmf_diversity':             nmf_metrics.get('diversity', 0.0),
+                        'nmf_silhouette_score':      nmf_metrics.get('silhouette_score', 0.0),
+                        'nmf_num_topics':            nmf_metrics.get('num_topics', 0),
+                        'nmf_training_time_seconds': nmf_metrics.get('training_time_seconds', 0.0),
+                    })
+                    logger.info("NMF comparison complete")
+                else:
+                    logger.warning(
+                        f"NMF comparison skipped or failed: {nmf_metrics.get('reason', 'unknown')}"
+                    )
+            except Exception as e:
+                logger.error(f"NMF comparison failed: {e}", exc_info=True)
+                logger.warning("Pipeline will continue without NMF metrics")
+                nmf_metrics = {'status': 'error', 'error_message': str(e)}
+
+            step3b_duration = time.time() - step3b_start
+            mlflow_logger.log_processing_time("nmf_modeling", step3b_duration)
+        else:
+            logger.info("Step 3b: NMF modeling disabled in config")
+
         # ========== STEP 4: DRIFT DETECTION ==========
-        step3_start = time.time()
+        step4_start = time.time()
         if Path(config.storage.previous_model_path).exists():
             logger.info("Step 4: Running drift detection flow")
             
@@ -270,8 +335,8 @@ def complete_pipeline_flow(
             logger.info("Drift detection complete")
             
             # Log drift metrics
-            step3_duration = time.time() - step3_start
-            mlflow_logger.log_processing_time("drift_detection", step3_duration)
+            step4_duration = time.time() - step4_start
+            mlflow_logger.log_processing_time("drift_detection", step4_duration)
             mlflow_logger.log_drift_metrics(drift_metrics, start_date)
             
             # Log alerts if any
@@ -349,6 +414,7 @@ def complete_pipeline_flow(
             'num_topics': len(set(topics)),
             'drift_detected': drift_metrics is not None and len(drift_metrics.get('alerts', [])) > 0,
             'lda_comparison': lda_metrics if lda_metrics else None,
+            'nmf_comparison': nmf_metrics if nmf_metrics else None,
             'mlflow_run_id': mlflow_run.info.run_id,
             'prefect_run_id': prefect_ctx.get('flow_run_id'),
             'duration_seconds': pipeline_duration

@@ -1,4 +1,8 @@
-"""Model Benchmarking - Three-way temporal evaluation: BERTopic vs LDA vs NMF."""
+"""Temporary script to rewrite the benchmarking dashboard."""
+from pathlib import Path
+
+new_content = '''\
+"""Model Benchmarking \u2014 Three-way temporal evaluation: BERTopic vs LDA vs NMF."""
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -13,7 +17,7 @@ from src.dashboard.components.theme import (
     inject_custom_css, page_header, render_footer,
 )
 
-st.set_page_config(page_title="Model Benchmarking", page_icon="⚖️", layout="wide")
+st.set_page_config(page_title="Model Benchmarking", page_icon="\u2696\ufe0f", layout="wide")
 inject_custom_css()
 
 if "api_client" not in st.session_state:
@@ -22,32 +26,32 @@ api = st.session_state.api_client
 
 page_header(
     "Model Benchmarking",
-    "Three-way temporal evaluation — BERTopic (primary) · LDA (baseline 1) · NMF (baseline 2)",
-    "⚖️",
+    "Three-way temporal evaluation \u2014 BERTopic (primary) \xb7 LDA (baseline 1) \xb7 NMF (baseline 2)",
+    "\u2696\ufe0f",
 )
 
-# ── Sidebar controls ──────────────────────────────────────────────────────────
+# \u2500\u2500 Sidebar controls \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 with st.sidebar:
-    st.markdown("### ⚙️ Display Settings")
+    st.markdown("### \u2699\ufe0f Display Settings")
     st.caption("Toggle which comparison baselines are shown alongside BERTopic.")
 
     show_lda = st.toggle(
-        "Show LDA (Baseline 1 — Dirichlet generative)",
+        "Show LDA (Baseline 1 \u2014 Dirichlet generative)",
         value=True,
         help="Latent Dirichlet Allocation: bag-of-words generative model.",
     )
     show_nmf = st.toggle(
-        "Show NMF (Baseline 2 — Matrix factorisation)",
+        "Show NMF (Baseline 2 \u2014 Matrix factorisation)",
         value=True,
         help="Non-negative Matrix Factorisation on TF-IDF: deterministic factorisation.",
     )
 
     st.divider()
-    st.markdown("### Chart Style")
+    st.markdown("### \ud83c\udfa8 Chart Style")
     chart_height = st.slider("Chart height (px)", 260, 480, 340, step=20)
 
     st.divider()
-    st.markdown("### Model Guide")
+    st.markdown("### \ud83d\udcda Model Guide")
     st.markdown("""
 | Model | Paradigm | Features |
 |---|---|---|
@@ -57,7 +61,7 @@ with st.sidebar:
     """)
 
 
-# ── Colour palette ────────────────────────────────────────────────────────────
+# \u2500\u2500 Colour palette \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 COLORS = {
     "BERTopic": "#6C5CE7",
     "LDA":      "#00B894",
@@ -65,7 +69,7 @@ COLORS = {
 }
 
 
-# ── Data loading ──────────────────────────────────────────────────────────────
+# \u2500\u2500 Data loading \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 @st.cache_data(ttl=60)
 def load_all_metrics():
     """Load temporal metrics for all three models. TTL=60 s for live refresh."""
@@ -102,23 +106,23 @@ def metric_vals(batches, key):
     return [b.get(key) for b in batches]
 
 
-# ── Refresh ───────────────────────────────────────────────────────────────────
+# \u2500\u2500 Refresh button \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 r_col, _ = st.columns([1, 5])
 with r_col:
-    if st.button("🔄 Refresh Metrics", help="Reload after pipeline run"):
+    if st.button("\ud83d\udd04 Refresh Metrics", help="Reload after pipeline run"):
         load_all_metrics.clear()
         st.rerun()
 
 st.info(
-    "📊 **Live dashboard** — metrics are written after each pipeline batch. "
+    "\ud83d\udcca **Live dashboard** \u2014 metrics are written after each pipeline batch. "
     "Click **Refresh Metrics** above to reload after a new run.",
-    icon="ℹ️",
+    icon="\u2139\ufe0f",
 )
 
 st.divider()
 
-# ── Summary cards ─────────────────────────────────────────────────────────────
-st.markdown("### 📊 Model Performance Summary")
+# \u2500\u2500 Average metrics summary cards \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+st.markdown("### \ud83d\udcca Model Performance Summary")
 st.caption("Average evaluation metrics across all batches processed so far.")
 
 bt_c   = metric_vals(bt_batches,  "coherence_c_v")
@@ -135,43 +139,44 @@ nmf_s  = metric_vals(nmf_batches, "silhouette_score")
 def _card(title, icon, rows_html, note):
     inner = "<br>".join(rows_html)
     return (
-        f'<div class="info-card" style="border-left:4px solid #6C5CE7;padding:1rem;">'
-        f'<h3>{icon} {title}</h3>'
-        f'<p style="font-size:1.15rem;margin:0.4rem 0;line-height:1.8;">{inner}</p>'
-        f'<p style="font-size:0.78rem;color:#636E72;">{note}</p></div>'
+        f\'<div class="info-card" style="border-left:4px solid #6C5CE7;padding:1rem;">\' +
+        f\'<h3>{icon} {title}</h3>\' +
+        f\'<p style="font-size:1.15rem;margin:0.4rem 0;line-height:1.8;">{inner}</p>\' +
+        f\'<p style="font-size:0.78rem;color:#636E72;">{note}</p>\' +
+        \'</div>\'
     )
 
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    rows = [f'<span style="color:{COLORS["BERTopic"]};font-weight:700;">BERTopic</span> {safe_avg(bt_c):.3f}']
+    rows = [f\'<span style="color:{COLORS["BERTopic"]};font-weight:700;">BERTopic</span> {safe_avg(bt_c):.3f}\']
     if show_lda:
-        rows.append(f'<span style="color:{COLORS["LDA"]};font-weight:700;">LDA</span> {safe_avg(lda_c):.3f}')
+        rows.append(f\'<span style="color:{COLORS["LDA"]};font-weight:700;">LDA</span> {safe_avg(lda_c):.3f}\')
     if show_nmf:
-        rows.append(f'<span style="color:{COLORS["NMF"]};font-weight:700;">NMF</span> {safe_avg(nmf_c):.3f}')
-    st.markdown(_card("Coherence (C_v)", "📐", rows, "Higher = more interpretable topics"), unsafe_allow_html=True)
+        rows.append(f\'<span style="color:{COLORS["NMF"]};font-weight:700;">NMF</span> {safe_avg(nmf_c):.3f}\')
+    st.markdown(_card("Coherence (C_v)", "\ud83d\udcd0", rows, "Higher = more interpretable topics"), unsafe_allow_html=True)
 
 with c2:
-    rows = [f'<span style="color:{COLORS["BERTopic"]};font-weight:700;">BERTopic</span> {safe_avg(bt_d):.3f}']
+    rows = [f\'<span style="color:{COLORS["BERTopic"]};font-weight:700;">BERTopic</span> {safe_avg(bt_d):.3f}\']
     if show_lda:
-        rows.append(f'<span style="color:{COLORS["LDA"]};font-weight:700;">LDA</span> {safe_avg(lda_d):.3f}')
+        rows.append(f\'<span style="color:{COLORS["LDA"]};font-weight:700;">LDA</span> {safe_avg(lda_d):.3f}\')
     if show_nmf:
-        rows.append(f'<span style="color:{COLORS["NMF"]};font-weight:700;">NMF</span> {safe_avg(nmf_d):.3f}')
-    st.markdown(_card("Topic Diversity", "🎯", rows, "Higher = less keyword overlap"), unsafe_allow_html=True)
+        rows.append(f\'<span style="color:{COLORS["NMF"]};font-weight:700;">NMF</span> {safe_avg(nmf_d):.3f}\')
+    st.markdown(_card("Topic Diversity", "\ud83c\udfaf", rows, "Higher = less keyword overlap"), unsafe_allow_html=True)
 
 with c3:
-    rows = [f'<span style="color:{COLORS["BERTopic"]};font-weight:700;">BERTopic</span> {safe_avg(bt_s):.3f}']
+    rows = [f\'<span style="color:{COLORS["BERTopic"]};font-weight:700;">BERTopic</span> {safe_avg(bt_s):.3f}\']
     if show_lda:
-        rows.append(f'<span style="color:{COLORS["LDA"]};font-weight:700;">LDA</span> {safe_avg(lda_s):.3f}')
+        rows.append(f\'<span style="color:{COLORS["LDA"]};font-weight:700;">LDA</span> {safe_avg(lda_s):.3f}\')
     if show_nmf:
-        rows.append(f'<span style="color:{COLORS["NMF"]};font-weight:700;">NMF</span> {safe_avg(nmf_s):.3f}')
-    st.markdown(_card("Silhouette Score", "🧮", rows, "Higher = better cluster separation (−1 → 1)"), unsafe_allow_html=True)
+        rows.append(f\'<span style="color:{COLORS["NMF"]};font-weight:700;">NMF</span> {safe_avg(nmf_s):.3f}\')
+    st.markdown(_card("Silhouette Score", "\ud83e\uddee", rows, "Higher = better cluster separation (\u22121 \u2192 1)"), unsafe_allow_html=True)
 
 st.divider()
 
-# ── Temporal line charts ──────────────────────────────────────────────────────
-st.markdown("### 📈 Temporal Evaluation Analysis")
-st.caption("Metrics plotted over training time — each point is one pipeline batch.")
+# \u2500\u2500 Temporal line charts \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+st.markdown("### \ud83d\udcc8 Temporal Evaluation Analysis")
+st.caption("Metrics plotted over training time \u2014 each point is one pipeline batch.")
 
 bt_map  = {b["batch_id"]: b for b in bt_batches  if b.get("batch_id")}
 lda_map = {b["batch_id"]: b for b in lda_batches if b.get("batch_id")}
@@ -187,7 +192,7 @@ def _sort_key(bid):
 batch_ids = sorted(all_ids, key=_sort_key)
 
 if not batch_ids:
-    st.info("📊 **No temporal data yet.** Run the pipeline to process batches.")
+    st.info("\ud83d\udcca **No temporal data yet.** Run the pipeline to process batches.")
 else:
     from datetime import datetime
 
@@ -207,7 +212,7 @@ else:
     vtime = [timestamps[i] for i in valid_idx]
 
     if not vids:
-        st.warning("⚠️ No valid timestamp data found in metrics.")
+        st.warning("\u26a0\ufe0f No valid timestamp data found in metrics.")
     else:
         def make_chart(metric_key, title, ylabel, height=chart_height):
             fig = go.Figure()
@@ -235,7 +240,7 @@ else:
             fig.update_layout(
                 template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 title=dict(text=title, font=dict(size=13, color="#B2BEC3")),
-                xaxis=dict(title="Training Time", showgrid=True, gridcolor="rgba(99,110,114,0.15)", tickformat="%m/%d\n%H:%M"),
+                xaxis=dict(title="Training Time", showgrid=True, gridcolor="rgba(99,110,114,0.15)", tickformat="%m/%d\\n%H:%M"),
                 yaxis=dict(title=ylabel, showgrid=True, gridcolor="rgba(99,110,114,0.15)"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
                 height=height, margin=dict(t=55, b=60, l=50, r=20), hovermode="x unified",
@@ -252,8 +257,8 @@ else:
 
 st.divider()
 
-# ── Radar chart ───────────────────────────────────────────────────────────────
-st.markdown("### 🕸️ Multi-Metric Radar Comparison")
+# \u2500\u2500 Radar chart \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+st.markdown("### \ud83d\uddd8\ufe0f Multi-Metric Radar Comparison")
 st.caption("Average scores across all three metrics on a single chart.")
 
 categories   = ["Coherence (C_v)", "Diversity", "Silhouette Score"]
@@ -293,15 +298,15 @@ st.plotly_chart(fig_radar, use_container_width=True)
 
 st.divider()
 
-# ── Batch table ───────────────────────────────────────────────────────────────
-st.markdown("### 📋 Batch-Level Metrics Table")
-st.caption("All processed batches with per-model scores. Toggle LDA / NMF on the sidebar to filter columns.")
+# \u2500\u2500 Batch table \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+st.markdown("### \ud83d\udccb Batch-Level Metrics Table")
+st.caption("All processed batches with per-model scores.  Toggle LDA / NMF on the sidebar to filter columns.")
 
 if batch_ids:
     rows = []
     for bid in batch_ids:
         ts_raw = (bt_map.get(bid) or lda_map.get(bid) or nmf_map.get(bid) or {}).get("timestamp", "")
-        row = {"Batch ID": bid, "Timestamp": ts_raw[:19].replace("T", " ") if ts_raw else "—"}
+        row = {"Batch ID": bid, "Timestamp": ts_raw[:19].replace("T", " ") if ts_raw else "\u2014"}
         for prefix, bmap, enabled in [
             ("BERTopic", bt_map, True),
             ("LDA",      lda_map, show_lda),
@@ -312,7 +317,7 @@ if batch_ids:
                 row[f"{prefix} Coherence"]  = round(b.get("coherence_c_v")   or 0, 4)
                 row[f"{prefix} Diversity"]  = round(b.get("diversity")        or 0, 4)
                 row[f"{prefix} Silhouette"] = round(b.get("silhouette_score") or 0, 4)
-                row[f"{prefix} Topics"]     = b.get("num_topics", "—")
+                row[f"{prefix} Topics"]     = b.get("num_topics", "\u2014")
         rows.append(row)
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 else:
@@ -320,36 +325,36 @@ else:
 
 st.divider()
 
-# ── Methodology documentation ─────────────────────────────────────────────────
-st.markdown("### 📝 Evaluation Methodology & Definitions")
+# \u2500\u2500 Methodology \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+st.markdown("### \ud83d\udcdd Evaluation Methodology & Definitions")
 
-with st.expander("📐 Topic Coherence (C_v)", expanded=True):
+with st.expander("\ud83d\udcd0 Topic Coherence (C_v)", expanded=True):
     st.markdown("""
 **Method:** Sliding window + NPMI + cosine similarity over top-K words per topic.
 
-- **BERTopic** — c-TF-IDF top-K words → Gensim CoherenceModel
-- **LDA** — Dirichlet top-K words → Gensim CoherenceModel
-- **NMF** — H-matrix top-K words → Gensim CoherenceModel
+- **BERTopic** \u2014 c-TF-IDF top-K words \u2192 Gensim CoherenceModel
+- **LDA** \u2014 Dirichlet top-K words \u2192 Gensim CoherenceModel
+- **NMF** \u2014 H-matrix top-K words \u2192 Gensim CoherenceModel
 
-**Range:** 0 → 1  ·  Higher = more interpretable topics
+**Range:** 0 \u2192 1 \xb7 Higher = more interpretable topics
     """)
 
-with st.expander("🎯 Topic Diversity"):
+with st.expander("\ud83c\udfaf Topic Diversity"):
     st.markdown("""
-**Formula:** |unique words across topics| / (top_k × num_topics)  ·  **Range:** 0 → 1
+**Formula:** |unique words across topics| / (top\\_k \xd7 num\\_topics) \xb7 **Range:** 0 \u2192 1
 
-⚠️ Raw diversity numbers are **not directly comparable** across model types:
+\u26a0\ufe0f Raw diversity numbers are **not directly comparable** across model types:
 
 | Model | Scoring | Expected |
 |---|---|---|
-| BERTopic | c-TF-IDF — explicitly penalises shared words | ~0.90–0.98 |
-| NMF | TF-IDF H-matrix — partial overlap suppression | ~0.50–0.85 |
-| LDA | P(word\\|topic) — shares generic words by design | ~0.15–0.35 |
+| BERTopic | c-TF-IDF \u2014 explicitly penalises shared words | ~0.90\u20130.98 |
+| NMF | TF-IDF H-matrix \u2014 partial overlap suppression | ~0.50\u20130.85 |
+| LDA | P(word\\|topic) \u2014 shares generic words by design | ~0.15\u20130.35 |
     """)
 
-with st.expander("🧮 Silhouette Score"):
+with st.expander("\ud83e\uddee Silhouette Score"):
     st.markdown("""
-**Formula:** (b−a)/max(a,b) per document, averaged  ·  **Range:** −1 → 1
+**Formula:** (b\u2212a)/max(a,b) per document, averaged \xb7 **Range:** \u22121 \u2192 1
 
 | Model | Distance Space |
 |---|---|
@@ -358,7 +363,7 @@ with st.expander("🧮 Silhouette Score"):
 | NMF | TF-IDF vectors, topic = argmax W row (cosine) |
     """)
 
-with st.expander("⚙️ Experimental Setup — Three-Way Comparison"):
+with st.expander("\u2699\ufe0f Experimental Setup \u2014 Three-Way Comparison"):
     st.markdown("""
 | Parameter | BERTopic | LDA | NMF |
 |-----------|----------|-----|-----|
@@ -367,12 +372,20 @@ with st.expander("⚙️ Experimental Setup — Three-Way Comparison"):
 | **Features** | Sentence-BERT 384-dim | BoW | TF-IDF (5k) |
 | **Algorithm** | HDBSCAN | Variational Bayes | Coord. Descent |
 | **Topic Count** | Auto (HDBSCAN) | Matched | Matched |
-| **Online** | merge_models() | Cumulative retrain | Cumulative retrain |
+| **Online** | merge\\_models() | Cumulative retrain | Cumulative retrain |
 
 **Why three models?**
-- BERTopic vs LDA → neural embeddings vs generative BoW (classical benchmark)
-- BERTopic vs NMF → confirms advantage beyond TF-IDF; NMF often outperforms LDA on short texts
-- LDA vs NMF → algebraic vs probabilistic anchor point
+- BERTopic vs LDA \u2192 neural embeddings vs generative BoW (classical benchmark)
+- BERTopic vs NMF \u2192 confirms advantage beyond TF-IDF; NMF outperforms LDA on short texts
+- LDA vs NMF \u2192 algebraic vs probabilistic anchor point
     """)
 
 render_footer()
+'''
+
+target = Path(
+    "/Users/krishnagajera/Project/COMPEE-798-Final-Year-Project/"
+    "Master-Project-BERTopic/src/dashboard/pages/6_Model_Benchmarking.py"
+)
+target.write_text(new_content, encoding="utf-8")
+print(f"Written {len(new_content.splitlines())} lines to {target}")

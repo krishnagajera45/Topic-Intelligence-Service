@@ -150,7 +150,26 @@ class APIClient:
         response = requests.get(f"{self.base_url}/api/v1/lda/history")
         response.raise_for_status()
         return response.json()
-    
+
+    # ── NMF Metrics ───────────────────────────────────────────────
+    def get_nmf_metrics(self) -> Dict[str, Any]:
+        """Get NMF model evaluation metrics."""
+        response = requests.get(f"{self.base_url}/api/v1/nmf/")
+        response.raise_for_status()
+        return response.json()
+
+    def get_nmf_metrics_history(self) -> Dict[str, Any]:
+        """Get NMF metrics history for temporal charts."""
+        response = requests.get(f"{self.base_url}/api/v1/nmf/history")
+        response.raise_for_status()
+        return response.json()
+
+    def get_three_way_comparison(self) -> Dict[str, Any]:
+        """Get BERTopic vs LDA vs NMF three-way comparison."""
+        response = requests.get(f"{self.base_url}/api/v1/nmf/comparison3")
+        response.raise_for_status()
+        return response.json()
+
     # ── Internal helper ───────────────────────────────────────────
     def _request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
         """Generic request method for flexibility."""
