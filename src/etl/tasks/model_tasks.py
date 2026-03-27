@@ -595,7 +595,8 @@ def train_batch_and_merge_models_task(
     logger.info(f"Training batch model and merging with base (batch retrain + merge_models)")
     
     config = load_config()
-    version_manager = ModelVersionManager()
+    model_base_dir = str(Path(config.storage.current_model_path).parent.parent)
+    version_manager = ModelVersionManager(base_dir=model_base_dir)
     
     # Use config min_similarity if not provided
     if min_similarity is None:

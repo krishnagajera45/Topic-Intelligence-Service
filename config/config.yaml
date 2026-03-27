@@ -1,9 +1,32 @@
+# ── Switch dataset by changing this single value ──────────────
+# Supported: "twitter" | "ag_news"
+active_dataset: "ag_news"
+
+# ── Per-dataset profiles ──────────────────────────────────────
+datasets:
+  twitter:
+    raw_csv_path: "data/raw/twcs_cleaned.csv"
+    sample_csv_path: "data/sample/twcs_sample.csv"
+    id_column: "tweet_id"          # column used as document ID
+    text_column: "text"            # column containing text
+    timestamp_column: "created_at" # column containing timestamps
+    id_prefix: "tweet"             # prefix for doc_id (e.g. tweet_123)
+    default_start: "2017-10-01"    # first timestamp in dataset
+    clean_mode: "twitter"          # cleaning preset (removes @mentions, URLs, etc.)
+    min_tokens: 5
+  ag_news:
+    raw_csv_path: "data/raw/ag_news_cleaned.csv"
+    sample_csv_path: ""
+    id_column: "article_id"
+    text_column: "text"
+    timestamp_column: "created_at"
+    id_prefix: "article"
+    default_start: "2024-01-01"
+    clean_mode: "general"          # general cleaning (no Twitter-specific rules)
+    min_tokens: 5
+
 data:
-  raw_csv_path: "data/raw/twcs_cleaned.csv"
-  processed_parquet_dir: "data/processed/"
-  sample_csv_path: "data/sample/twcs_sample.csv"
-  timestamp_column: "created_at"
-  text_column: "text"
+  processed_parquet_dir: "data/processed/{dataset}/"
 
 model:
   embedding_model: "all-MiniLM-L6-v2"
@@ -22,17 +45,18 @@ model:
   top_words_for_label: 3  # Number of top words used for custom label generation
 
 storage:
-  topics_metadata_path: "outputs/topics/topics_metadata.json"
-  doc_assignments_path: "outputs/assignments/doc_assignments.csv"
-  alerts_path: "outputs/alerts/drift_alerts.csv"
-  audit_log_path: "outputs/audit/hitl_audit_log.csv"
-  current_model_path: "models/current/bertopic_model.pkl"
-  previous_model_path: "models/previous/bertopic_model.pkl"
-  state_file: "data/state/processing_state.json"
+  topics_metadata_path: "outputs/{dataset}/topics/topics_metadata.json"
+  doc_assignments_path: "outputs/{dataset}/assignments/doc_assignments.csv"
+  alerts_path: "outputs/{dataset}/alerts/drift_alerts.csv"
+  audit_log_path: "outputs/{dataset}/audit/hitl_audit_log.csv"
+  current_model_path: "models/{dataset}/current/bertopic_model.pkl"
+  previous_model_path: "models/{dataset}/previous/bertopic_model.pkl"
+  state_file: "data/state/{dataset}_processing_state.json"
+  metrics_dir: "outputs/{dataset}/metrics"
   
 mlflow:
   tracking_uri: "file:./mlruns"
-  experiment_name: "twcs_topic_modeling"
+  experiment_name: "{dataset}_topic_modeling"
 
 ollama:
   enabled: true

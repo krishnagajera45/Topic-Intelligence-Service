@@ -272,11 +272,12 @@ def info_card(title: str, content: str):
     """, unsafe_allow_html=True)
 
 
-def render_footer():
+def render_footer(dataset_label: str = ""):
     """Render the app footer."""
-    st.markdown("""
+    _label = dataset_label or "Online Topic Modeling System"
+    st.markdown(f"""
     <div class="app-footer">
-        <strong>TwCS Online Topic Modeling System</strong> v2.0 &nbsp;·&nbsp;
+        <strong>{_label}</strong> v2.0 &nbsp;·&nbsp;
         Powered by <a href="https://maartengr.github.io/BERTopic/" target="_blank">BERTopic</a>,
         <a href="https://streamlit.io" target="_blank">Streamlit</a> &
         <a href="https://fastapi.tiangolo.com" target="_blank">FastAPI</a>

@@ -8,6 +8,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 from src.dashboard.components.theme import inject_custom_css, page_header, render_footer
+from src.utils.config import load_config as _load_cfg
+_cfg = _load_cfg()
+_ds_name = _cfg.active_dataset  # e.g. "twitter" or "ag_news"
+_ds_title = _ds_name.replace("_", " ").title()
 
 st.set_page_config(page_title="Project Overview", page_icon="📖", layout="wide")
 inject_custom_css()
@@ -25,7 +29,7 @@ tab_intro, tab_arch, tab_data, tab_method, tab_eval, tab_compare, tab_team = st.
     "📊 Data",
     "🔬 Methodology",
     "📈 Evaluation",
-    "⚖️ LDA vs BERTopic",
+    "⚖️ Three-Model Comparison",
     "👥 About",
 ])
 
@@ -144,7 +148,7 @@ with tab_arch:
         st.markdown("""
         <div class="info-card">
             <h3>📥 Data Ingestion Flow</h3>
-            <p>Reads raw TwCS CSV, filters by configurable time-window batches (e.g., hourly, daily),
+            <p>Reads raw CSV, filters by configurable time-window batches (e.g., hourly, daily),
             cleans text (URL/mention removal, emoji stripping, phone/version masking), normalizes
             unicode, and saves processed data as Parquet. Filters inbound (customer) tweets only.</p>
         </div>
@@ -179,12 +183,23 @@ with tab_arch:
 
 # ── DATA ──────────────────────────────────────────────────────────────────────
 with tab_data:
-    st.markdown("## Dataset — Twitter Customer Support (TwCS)")
-    st.markdown("""
-    The [TwCS dataset](https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter)
+    _dataset_descriptions = {
+        "twitter": (
+            "## Dataset — Twitter Customer Support (TwCS)",
+            """The [TwCS dataset](https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter)
     contains **~3 million tweets** exchanged between customers and support
-    agents across major brands on Twitter/X.
-    """)
+    agents across major brands on Twitter/X.""",
+        ),
+        "ag_news": (
+            "## Dataset — AG News",
+            """The [AG News dataset](https://huggingface.co/datasets/ag_news)
+    contains **~127 k news articles** across 4 categories:
+    World, Sports, Business, and Sci/Tech.""",
+        ),
+    }
+    _h, _d = _dataset_descriptions.get(_ds_name, (f"## Dataset — {_ds_title}", ""))
+    st.markdown(_h)
+    st.markdown(_d)
 
     d1, d2, d3 = st.columns(3)
     with d1:
@@ -413,48 +428,138 @@ with tab_team:
     https://github.com/krishnagajera45/Online-BERTopic-with-Human-in-the-Loop-for-Customer-Support-Insights)
     """)
 
-# ── LDA vs BERTopic ──────────────────────────────────────────────────────────
+# ── THREE-MODEL COMPARISON ────────────────────────────────────────────────────
 with tab_compare:
-    st.markdown("## ⚖️ LDA vs BERTopic — Implementation Comparison")
-    st.caption("Based on the exact code in `src/etl/tasks/lda_tasks.py` and `src/etl/tasks/model_tasks.py`.")
+    st.markdown("## ⚖️ BERTopic vs LDA vs NMF — Complete Implementation Comparison")
+    st.caption("""
+    This section explains **exactly how** each model is implemented in our codebase, based on:  
+    • `src/etl/tasks/model_tasks.py` (BERTopic)  
+    • `src/etl/tasks/lda_tasks.py` (LDA)  
+    • `src/etl/tasks/nmf_tasks.py` (NMF)
+    """)
+    
+    st.markdown("""
+    ### 🎯 Why Three Models?
+    
+    We compare BERTopic against **two distinct baseline paradigms** to rigorously validate its advantages:
+    
+    | Model | Paradigm | Why Include? |
+    |-------|----------|--------------|
+    | **BERTopic** (Primary) | Neural embeddings + density clustering | State-of-art for short, noisy text with contextual understanding |
+    | **LDA** (Baseline 1) | Probabilistic generative (Dirichlet) | Classical gold standard — widely used benchmark in NLP research |
+    | **NMF** (Baseline 2) | Algebraic matrix factorization | Often outperforms LDA on short text; tests if BERTopic beats TF-IDF methods |
+    
+    **Research Question:** Does BERTopic's neural approach justify the computational cost vs simpler TF-IDF/BoW methods?
+    """)
+
+    st.divider()
+
+    # ── Paradigm Overview ─────────────────────────────────────────────────────
+    st.markdown("### 🧠 Core Paradigms — Fundamentally Different Approaches")
+    
+    par1, par2, par3 = st.columns(3)
+    with par1:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
+            <h3>🤖 BERTopic — Neural Clustering</h3>
+            <p>
+            <strong>Paradigm:</strong> Representation learning + density clustering<br/><br/>
+            <strong>Core idea:</strong><br/>
+            1. Pre-trained transformer (BERT) maps text → semantic embeddings<br/>
+            2. UMAP reduces dimensions while preserving local structure<br/>
+            3. HDBSCAN finds dense regions (clusters) of any shape<br/>
+            4. c-TF-IDF extracts representative words per cluster<br/><br/>
+            <strong>Philosophy:</strong> Let the data's geometric structure dictate topics — no generative assumptions.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with par2:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #00B894;">
+            <h3>📊 LDA — Generative Bayesian</h3>
+            <p>
+            <strong>Paradigm:</strong> Probabilistic generative model<br/><br/>
+            <strong>Core idea:</strong><br/>
+            1. Assume: corpus generated from K hidden topics<br/>
+            2. Each document = mixture of topics (Dirichlet prior)<br/>
+            3. Each topic = distribution over words (Dirichlet prior)<br/>
+            4. Variational Bayes infers latent structure<br/><br/>
+            <strong>Philosophy:</strong> Model the generation process — invert it to find topics. Established in 2003 (Blei et al.).
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with par3:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #E17055;">
+            <h3>🔢 NMF — Matrix Factorization</h3>
+            <p>
+            <strong>Paradigm:</strong> Algebraic optimization<br/><br/>
+            <strong>Core idea:</strong><br/>
+            1. Document-term matrix V (TF-IDF weights)<br/>
+            2. Factorize: V ≈ W × H<br/>
+            &nbsp;&nbsp;• W = document-topic weights<br/>
+            &nbsp;&nbsp;• H = topic-word weights<br/>
+            3. Constrain W, H ≥ 0 (interpretable)<br/>
+            4. Minimize reconstruction error via coordinate descent<br/><br/>
+            <strong>Philosophy:</strong> Parts-based representation — documents are weighted sums of topics. Deterministic (unlike LDA's Bayesian sampling).
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.divider()
 
     # ── Step 1: Preprocessing ─────────────────────────────────────────────────
     st.markdown("### Step 1 — Text Preprocessing")
-    p1, p2 = st.columns(2)
+    st.caption("What happens to your text *before* it enters the model?")
+    
+    p1, p2, p3 = st.columns(3)
     with p1:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #636E72;">
-            <h3>🗃️ LDA (Gensim)</h3>
+        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
+            <h3>🤖 BERTopic — Minimal</h3>
             <p>
-            <strong>Library:</strong> <code>gensim.utils.simple_preprocess</code>, NLTK<br/><br/>
-            <strong>Pipeline (preprocess_documents_for_lda_task):</strong><br/>
-            1. <code>simple_preprocess(doc, deacc=True, min_len=3)</code> — tokenize + remove accents<br/>
-            2. Remove English stopwords via <code>stopwords.words('english')</code><br/>
-            3. Lemmatize every token: <code>WordNetLemmatizer().lemmatize(token)</code><br/>
-            4. Discard tokens shorter than 3 characters after lemmatization<br/>
-            5. Build Gensim <code>Dictionary</code> + filter extremes:<br/>
-            &nbsp;&nbsp;&bull; <code>no_below=5</code> (min 5 docs)<br/>
-            &nbsp;&nbsp;&bull; <code>no_above=0.5</code> (max 50% of corpus)<br/>
-            &nbsp;&nbsp;&bull; <code>keep_n=10000</code> (vocabulary cap)<br/>
-            6. Convert to Bag-of-Words via <code>doc2bow</code><br/><br/>
-            <strong>Why heavy preprocessing?</strong> BoW only captures word counts — common words like "the", "is" would dominate without aggressive filtering.
+            <strong>Code:</strong> <code>initialize_bertopic_model_task()</code><br/><br/>
+            <strong>Steps:</strong><br/>
+            1. Remove URLs, @mentions, emojis<br/>
+            2. Normalize unicode (NFD decomposition)<br/>
+            3. Pass <em>full sentences</em> to Sentence-BERT<br/><br/>
+            <strong>Why minimal?</strong><br/>
+            BERT is pre-trained on billions of natural sentences — it understands context, grammar, negation natively. Stopwords like "not" carry critical semantic weight ("not happy" ≠ "happy").
             </p>
         </div>
         """, unsafe_allow_html=True)
     with p2:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
-            <h3>🤖 BERTopic (Sentence-BERT)</h3>
+        <div class="info-card" style="border-left: 4px solid #00B894;">
+            <h3>📊 LDA — Heavy NLP</h3>
             <p>
-            <strong>Library:</strong> <code>sentence_transformers</code><br/><br/>
-            <strong>Pipeline (initialize_bertopic_model_task):</strong><br/>
-            1. Basic text cleaning only — remove URLs, @mentions, emojis<br/>
-            2. <code>SentenceTransformer('all-MiniLM-L6-v2')</code> encodes the full sentence<br/>
-            3. No tokenization, no stopword removal, no lemmatization needed<br/>
-            4. Full sentence passed to transformer as-is<br/><br/>
-            <strong>Why minimal preprocessing?</strong> BERT is pre-trained on billions of sentences — it inherently understands grammar, context, and semantics. Stopwords like "not" carry real meaning (e.g., "not happy" ≠ "happy").
+            <strong>Code:</strong> <code>preprocess_documents_for_lda_task()</code><br/><br/>
+            <strong>Steps:</strong><br/>
+            1. <code>simple_preprocess(deacc=True, min_len=3)</code><br/>
+            2. Remove NLTK stopwords<br/>
+            3. Lemmatize (WordNetLemmatizer)<br/>
+            4. Gensim Dictionary:<br/>
+            &nbsp;&nbsp;• no_below=5, no_above=0.5<br/>
+            &nbsp;&nbsp;• keep_n=10000<br/>
+            5. Convert to Bag-of-Words<br/><br/>
+            <strong>Why heavy?</strong> BoW only sees word counts — stopwords and inflections ("runs", "running") would dominate without filtering.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with p3:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #E17055;">
+            <h3>🔢 NMF — TF-IDF</h3>
+            <p>
+            <strong>Code:</strong> <code>preprocess_documents_for_nmf_task()</code><br/><br/>
+            <strong>Dual pipeline:</strong><br/>
+            <strong>A) For NMF training:</strong><br/>
+            <code>TfidfVectorizer(max_features=5000,<br/>
+            min_df=5, max_df=0.85,<br/>
+            ngram_range=(1,1))</code><br/><br/>
+            <strong>B) For coherence:</strong><br/>
+            Same lemmatization as LDA → Gensim Dictionary (keep_n=10000)<br/><br/>
+            <strong>Why TF-IDF?</strong> Downweights frequent words while preserving matrix structure. NMF needs non-negative inputs.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -463,37 +568,55 @@ with tab_compare:
 
     # ── Step 2: Document Representation ───────────────────────────────────────
     st.markdown("### Step 2 — Document Representation")
-    r1, r2 = st.columns(2)
+    st.caption("How is each document mathematically encoded?")
+    
+    r1, r2, r3 = st.columns(3)
     with r1:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #636E72;">
-            <h3>🗃️ LDA — Bag-of-Words</h3>
+        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
+            <h3>🤖 BERTopic<br/>384-dim Dense</h3>
             <p>
-            <strong>Output:</strong> Sparse integer vector (~10,000 dims)<br/><br/>
-            <strong>Example tweet:</strong> <em>"App keeps crashing!"</em><br/>
-            After preprocessing: <code>['app', 'keep', 'crash']</code><br/>
-            BoW: <code>{app: 1, keep: 1, crash: 1, ...rest: 0}</code><br/><br/>
-            <strong>Limitations:</strong><br/>
-            &bull; Word order lost — "not happy" = "happy not"<br/>
-            &bull; No semantics — "crash" ≠ "freeze" ≠ "stop working"<br/>
-            &bull; Very sparse for short tweets (mostly zeros)
+            <strong>Model:</strong> <code>all-MiniLM-L6-v2</code><br/><br/>
+            <strong>Example:</strong> "App keeps crashing!"<br/>
+            → <code>[0.23, -0.45, ..., 0.89]</code><br/><br/>
+            <strong>Advantages:</strong><br/>
+            • Semantic: "crash" ≈ "freeze"<br/>
+            • Context: "not happy" ≠ "happy"<br/>
+            • Robust on short text<br/>
+            • Similar sentences → nearby points
             </p>
         </div>
         """, unsafe_allow_html=True)
     with r2:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
-            <h3>🤖 BERTopic — 384-dim Dense Embeddings</h3>
+        <div class="info-card" style="border-left: 4px solid #00B894;">
+            <h3>📊 LDA<br/>BoW Sparse</h3>
             <p>
-            <strong>Output:</strong> Dense float vector of 384 dimensions<br/>
-            <strong>Model:</strong> <code>all-MiniLM-L6-v2</code>, batch_size=32<br/><br/>
-            <strong>Example tweet:</strong> <em>"App keeps crashing!"</em><br/>
-            Embedding: <code>[0.23, -0.45, 0.12, ..., 0.89]</code> (384 values)<br/><br/>
-            <strong>Advantages:</strong><br/>
-            &bull; Semantic similarity: "crash" ≈ "freeze" ≈ "stop working"<br/>
-            &bull; Context-aware: "not happy" ≠ "happy"<br/>
-            &bull; Robust on short text — rich signal even from 3 words<br/>
-            &bull; Semantically similar sentences map to nearby vector space points
+            <strong>Output:</strong> ~10k dims, mostly zeros<br/><br/>
+            <strong>Example:</strong> "App keeps crashing!"<br/>
+            After preprocessing:<br/>
+            <code>['app', 'keep', 'crash']</code><br/>
+            BoW: <code>{app:1, keep:1, crash:1, …rest:0}</code><br/><br/>
+            <strong>Limitations:</strong><br/>
+            • Order lost: "not happy" = "happy not"<br/>
+            • No semantics: "crash" ≠ "freeze"<br/>
+            • Very sparse
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with r3:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #E17055;">
+            <h3>🔢 NMF<br/>TF-IDF Sparse</h3>
+            <p>
+            <strong>Output:</strong> 5000 dims, sparse<br/><br/>
+            <strong>Example:</strong> "App keeps crashing!"<br/>
+            TF-IDF: <code>{app:0.38, keep:0.29, crash:0.51, …rest:0}</code><br/><br/>
+            <strong>vs BoW:</strong><br/>
+            • TF-IDF downweights frequent words<br/>
+            • Emphasizes distinctive terms<br/>
+            • Still no semantics ("crash" ≠ "freeze")<br/>
+            • Unigrams only (no bigrams)
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -501,48 +624,63 @@ with tab_compare:
     st.divider()
 
     # ── Step 3: Topic Discovery ────────────────────────────────────────────────
-    st.markdown("### Step 3 — Topic Discovery")
-    t1, t2 = st.columns(2)
+    st.markdown("### Step 3 — Topic Discovery Alggorithm")
+    st.caption("How are topics identified from document representations?")
+    
+    t1, t2, t3 = st.columns(3)
     with t1:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #636E72;">
-            <h3>🗃️ LDA — Dirichlet + Variational Bayes</h3>
+        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
+            <h3>🤖 BERTopic<br/>UMAP → HDBSCAN</h3>
             <p>
-            <strong>Exact config (from lda_tasks.py):</strong><br/>
-            <code>LdaModel(corpus, id2word=dictionary,<br/>
-            &nbsp;num_topics=N, alpha='auto', eta='auto',<br/>
-            &nbsp;passes=10, iterations=200,<br/>
-            &nbsp;update_every=1, chunksize=100,<br/>
-            &nbsp;per_word_topics=True)</code><br/><br/>
-            <strong>How it works:</strong><br/>
-            &bull; Assumes: document = mixture of K topics<br/>
-            &bull; Assumes: topic = distribution over vocabulary<br/>
-            &bull; <code>alpha='auto'</code>: learns document-topic concentration<br/>
-            &bull; <code>eta='auto'</code>: learns topic-word concentration<br/>
-            &bull; <strong>K must be fixed upfront</strong> (set equal to BERTopic's count for fair comparison)<br/>
-            &bull; Each doc gets a <em>soft</em> probability vector over all topics
+            <strong>UMAP:</strong><br/>
+            <code>n_neighbors=15, n_components=5,<br/>
+            min_dist=0.0, metric='cosine'</code><br/>
+            Reduces 384→5 dims<br/><br/>
+            <strong>HDBSCAN:</strong><br/>
+            <code>min_cluster_size=15,<br/>
+            min_samples=5,<br/>
+            metric='euclidean'</code><br/><br/>
+            • Density-based<br/>
+            • K auto-detected<br/>
+            • Outliers → Topic -1<br/>
+            • Hard assignment
             </p>
         </div>
         """, unsafe_allow_html=True)
     with t2:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
-            <h3>🤖 BERTopic — UMAP → HDBSCAN</h3>
+        <div class="info-card" style="border-left: 4px solid #00B894;">
+            <h3>📊 LDA<br/>Dirichlet + VB</h3>
             <p>
-            <strong>Stage A — UMAP (model_config.yaml):</strong><br/>
-            <code>UMAP(n_neighbors=15, n_components=5,<br/>
-            &nbsp;min_dist=0.0, metric='cosine',<br/>
-            &nbsp;random_state=42)</code><br/>
-            Reduces 384-dim → 5-dim preserving local neighbourhood structure<br/><br/>
-            <strong>Stage B — HDBSCAN:</strong><br/>
-            <code>HDBSCAN(min_cluster_size=15, min_samples=5,<br/>
-            &nbsp;metric='euclidean',<br/>
-            &nbsp;cluster_selection_method='eom',<br/>
-            &nbsp;prediction_data=True)</code><br/><br/>
-            &bull; Density-based: finds clusters of any shape<br/>
-            &bull; <strong>K auto-detected</strong> from data density<br/>
-            &bull; Outliers assigned to Topic -1 (excluded from all metrics)<br/>
-            &bull; <em>Hard</em> assignment (1 topic per document)
+            <strong>Config:</strong><br/>
+            <code>LdaModel(corpus,<br/>
+            num_topics=N, alpha='auto', eta='auto',<br/>
+            passes=10, iterations=200)</code><br/><br/>
+            <strong>Mechanics:</strong><br/>
+            • Document = mixture of K topics<br/>
+            • Topic = distribution over words<br/>
+            • <strong>K fixed upfront</strong> (matched to BERTopic)<br/>
+            • Soft assignment (probability per topic)
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with t3:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #E17055;">
+            <h3>🔢 NMF<br/>V ≈ W × H</h3>
+            <p>
+            <strong>Config:</strong><br/>
+            <code>NMF(n_components=N,<br/>
+            init='nndsvda', solver='cd',<br/>
+            max_iter=400,<br/>
+            alpha_W=0.0, alpha_H=0.0)</code><br/><br/>
+            <strong>Mechanics:</strong><br/>
+            • Factorize TF-IDF matrix<br/>
+            • Minimize ||V − W×H||²<br/>
+            • W, H ≥ 0 (interpretable)<br/>
+            • <strong>K fixed</strong> (matched to BERTopic)<br/>
+            • Hard assignment (argmax W row)
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -551,95 +689,197 @@ with tab_compare:
 
     # ── Step 4: Topic Representation ──────────────────────────────────────────
     st.markdown("### Step 4 — Topic Representation & Labels")
-    rp1, rp2 = st.columns(2)
-    with rp1:
+    st.caption("How are topics described and labeled?")
+    
+    rep1, rep2, rep3 = st.columns(3)
+    with rep1:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #636E72;">
-            <h3>🗃️ LDA — Top-N Weighted Words</h3>
+        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
+            <h3>🤖 BERTopic<br/>c-TF-IDF + LLM</h3>
             <p>
-            Each topic is described by the highest-probability words from the learned Dirichlet distribution.<br/><br/>
-            <strong>Example output:</strong><br/>
-            Topic 3: <code>['flight', 'cancel', 'refund', 'book', 'ticket']</code><br/><br/>
-            <strong>Limitation:</strong> Labels must be inferred manually — the model provides only words, not a human-readable title. No bigrams.
+            <strong>CountVectorizer:</strong><br/>
+            <code>min_df=5, max_df=0.95,<br/>
+            ngram_range=(1,2)</code><br/>
+            Includes bigrams!<br/><br/>
+            <strong>c-TF-IDF:</strong><br/>
+            Scores words by distinctiveness per cluster vs all others<br/><br/>
+            <strong>LLM Labels:</strong><br/>
+            Ollama (DeepSeek-R1:1.5b) reads keywords → generates human-readable topic name
             </p>
         </div>
         """, unsafe_allow_html=True)
-    with rp2:
+    with rep2:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
-            <h3>🤖 BERTopic — c-TF-IDF + Ollama (DeepSeek-R1:1.5b)</h3>
+        <div class="info-card" style="border-left: 4px solid #00B894;">
+            <h3>📊 LDA<br/>Top-N Words</h3>
             <p>
-            <strong>CountVectorizer (model_config.yaml):</strong><br/>
-            <code>stop_words='english', min_df=5, max_df=0.95,<br/>
-            &nbsp;ngram_range=(1, 2)</code> — includes bigrams!<br/><br/>
-            <strong>ClassTfidfTransformer:</strong><br/>
-            <code>bm25_weighting=False, reduce_frequent_words=False</code><br/>
-            Scores words by how distinctive they are in each cluster vs all others.<br/><br/>
-            <strong>LLM Labels (Ollama):</strong> DeepSeek-R1:1.5b reads the top keywords and generates a concise human-readable topic name automatically.
+            <strong>Extraction:</strong><br/>
+            Highest-probability words from Dirichlet distribution<br/><br/>
+            <strong>Example:</strong><br/>
+            Topic 3: <code>['flight', 'cancel', 'refund', 'book', 'ticket']</code><br/><br/>
+            <strong>Limitation:</strong><br/>
+            No automatic labels — experts must infer meaning. No bigrams.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with rep3:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #E17055;">
+            <h3>🔢 NMF<br/>H-Matrix Top-N</h3>
+            <p>
+            <strong>Extraction:</strong><br/>
+            Highest-weight words from H matrix (topic-word weights)<br/><br/>
+            <strong>Example:</strong><br/>
+            Topic 3: <code>['flight', 'delay', 'airport', 'hour', 'gate']</code><br/><br/>
+            <strong>Limitation:</strong><br/>
+            No automatic labels. Unigrams only (ngram_range=(1,1)) to match Gensim coherence dictionary.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     st.divider()
 
-    # ── Step 5: Online / Incremental Learning ─────────────────────────────────
-    st.markdown("### Step 5 — Online / Incremental Learning")
-    ol1, ol2 = st.columns(2)
+    # ── Step 5: Online Learning ───────────────────────────────────────────────
+    st.markdown("### Step 5 — Online/Incremental Learning Strategy")
+    st.caption("How does each model handle new batches over time?")
+    
+    ol1, ol2, ol3 = st.columns(3)
     with ol1:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #636E72;">
-            <h3>🗃️ LDA — Full Corpus Retrain Each Batch</h3>
+        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
+            <h3>🤖 BERTopic<br/>merge_models()</h3>
             <p>
-            LDA has no native online learning for the full model structure.<br/><br/>
-            <strong>Strategy used in this project:</strong><br/>
-            After each new batch, retrain LDA on the <em>entire</em> cumulative corpus from scratch:<br/>
-            <code>LdaModel(full_cumulative_corpus,<br/>
-            &nbsp;num_topics=N, passes=10, ...)</code><br/><br/>
-            <strong>Drawback:</strong> Training time grows with each batch. All historical documents are reprocessed every run.
+            <strong>Strategy:</strong><br/>
+            1. Train fresh model on new batch only<br/>
+            2. <code>base.merge_models([new_batch],<br/>
+            &nbsp;&nbsp;min_similarity=...)</code><br/>
+            3. Archive previous version<br/><br/>
+            <strong>Preserved:</strong><br/>
+            • All historical topics<br/>
+            • HITL edits (merged topics, labels)<br/>
+            • New discoveries<br/><br/>
+            <strong>Advantage:</strong> Only new data processed per run
             </p>
         </div>
         """, unsafe_allow_html=True)
     with ol2:
         st.markdown("""
-        <div class="info-card" style="border-left: 4px solid #6C5CE7;">
-            <h3>🤖 BERTopic — merge_models()</h3>
+        <div class="info-card" style="border-left: 4px solid #00B894;">
+            <h3>📊 LDA<br/>Full Retrain</h3>
             <p>
-            <strong>Strategy used in this project (model_tasks.py):</strong><br/>
-            1. Train a fresh BERTopic on the new batch only<br/>
-            2. Merge with existing cumulative model:<br/>
-            <code>base_model.merge_models([new_batch_model],<br/>
-            &nbsp;min_similarity=...)</code><br/>
-            3. Archive previous model version with timestamp<br/><br/>
-            <strong>What is preserved after merge:</strong><br/>
-            &bull; All historical topics from prior batches<br/>
-            &bull; HITL edits (merged topics, custom labels)<br/>
-            &bull; New topics discovered in the current batch<br/><br/>
-            <strong>Advantage:</strong> Only new data is processed per run.
+            <strong></strong><br/>
+            No native online learning for full model structure<br/><br/>
+            <strong>Strategy:</strong><br/>
+            Retrain on <em>entire</em> cumulative corpus from scratch:<br/>
+            <code>LdaModel(full_cumulative_corpus,<br/>
+            num_topics=N, passes=10, ...)</code><br/><br/>
+            <strong>Drawback:</strong> Training time grows with each batch — all historical docs reprocessed
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with ol3:
+        st.markdown("""
+        <div class="info-card" style="border-left: 4px solid #E17055;">
+            <h3>🔢 NMF<br/>Full Retrain</h3>
+            <p>
+            <strong>Strategy:</strong><br/>
+            Retrain on <em>entire</em> cumulative corpus:<br/>
+            <code>NMF(n_components=N).fit(cumulative_tfidf)</code><br/><br/>
+            <strong>Note:</strong> Faster than LDA (deterministic coordinate descent vs probabilistic sampling)<br/><br/>
+            <strong>Drawback:</strong> Still O(corpus size) — no incremental accumulation
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     st.divider()
 
-    # ── Quick Comparison Table ─────────────────────────────────────────────────
-    st.markdown("### 📊 Side-by-Side Parameter Reference")
+    # ── Master Comparison Table ──────────────────────────────────────────────
+    st.markdown("### 📊 Master Comparison Table")
     st.markdown("""
-| Parameter | **LDA (Gensim)** | **BERTopic (Our Implementation)** |
-|-----------|------------------|-----------------------------------|
-| **Library** | `gensim.models.LdaModel` | `bertopic.BERTopic` |
-| **Embedding** | Bag-of-Words (~10k dims, sparse) | `all-MiniLM-L6-v2` (384 dims, dense) |
-| **Preprocessing** | Tokenize → stopwords → lemmatize → BoW | URL/mention/emoji removal only |
-| **Vocabulary filter** | no_below=5, no_above=0.5, keep_n=10000 | min_df=5, max_df=0.95 (CountVectorizer) |
-| **Dimensionality reduction** | None | UMAP: n_neighbors=15, n_components=5, metric=cosine |
-| **Clustering** | Dirichlet (Variational Bayes) | HDBSCAN: min_cluster_size=15, min_samples=5 |
-| **Ngrams** | Unigrams only | Unigrams + bigrams (1, 2) |
-| **Topic count** | Fixed (set = BERTopic's auto-detected count) | Auto-detected by HDBSCAN |
-| **Assignment type** | Soft (probability per topic) | Hard (1 topic per document) |
-| **Outlier handling** | None | Topic -1 excluded from all metrics |
-| **Topic labels** | Top-N weighted words only | c-TF-IDF keywords + Ollama LLM labels |
-| **Training passes** | passes=10, iterations=200, chunksize=100 | Single forward pass (fit_transform) |
-| **Online strategy** | Full corpus retrain per batch | merge_models() — new batch only |
-| **HITL support** | None | merge_topics(), set_topic_labels(), versioned archive |
+| **Parameter** | **BERTopic** | **LDA** | **NMF** |
+|---------------|--------------|---------|---------|
+| **Library** | `bertopic.BERTopic` | `gensim.models.LdaModel` | `sklearn.decomposition.NMF` |
+| **Paradigm** | Neural embeddings + clustering | Probabilistic generative | Matrix factorization |
+| **Embedding** | Sentence-BERT (384 dims, dense) | Bag-of-Words (~10k dims, sparse) | TF-IDF (5k dims, sparse) |
+| **Preprocessing** | Minimal: URL/mention/emoji removal | Heavy: tokenize→stopwords→lemmatize→BoW | TF-IDF + lemmatization for coherence |
+| **Vocabulary filter** | min_df=5, max_df=0.95 (CountVectorizer) | no_below=5, no_above=0.5, keep_n=10000 | min_df=5, max_df=0.85, max_features=5000 |
+| **Dim reduction** | UMAP: n_neighbors=15, n_components=5, metric=cosine | None | None (TF-IDF already dimensioned) |
+| **Clustering** | HDBSCAN: min_cluster_size=15, min_samples=5 | Dirichlet (Variational Bayes) | Coordinate descent (||V−W×H||²) |
+| **Ngrams** | Unigrams + bigrams (1, 2) | Unigrams only | Unigrams only (for coherence compatibility) |
+| **Topic count (K)** | Auto-detected by HDBSCAN | Fixed (matched to BERTopic) | Fixed (matched to BERTopic) |
+| **Assignment type** | Hard (1 topic per doc) | Soft (probability per topic) | Hard (argmax W row) |
+| **Outlier handling** | Topic -1 excluded from metrics | None (all docs assigned) | Zero-norm TF-IDF rows filtered |
+| **Topic labels** | c-TF-IDF keywords + Ollama LLM labels | Top-N weighted words only | H-matrix top-N words only |
+| **Training passes** | Single forward pass (fit_transform) | passes=10, iterations=200, chunksize=100 | max_iter=400, init='nndsvda', solver='cd' |
+| **Online strategy** | merge_models() — new batch only | Full corpus retrain | Full corpus retrain (faster than LDA) |
+| **HITL support** | ✅ merge_topics(), set_topic_labels(), archive | ❌ None | ❌ None |
+| **Regularization** | None (HDBSCAN density-based) | alpha='auto', eta='auto' (Dirichlet prior) | alpha_W=0.0, alpha_H=0.0 (disabled for short text) |
+| **Coherence metric** | Gensim C_v | Gensim C_v | Gensim C_v (same formula across all 3) |
+| **Diversity metric** | unique_words / (top_n × K) | unique_words / (top_n × K) | unique_words / (top_n × K) |
+| **Silhouette metric** | UMAP 5-dim space (cosine) | TF-IDF space (cosine) | TF-IDF space (cosine) |
+    """)
+
+    st.divider()
+
+    # ── Key Takeaways ─────────────────────────────────────────────────────────
+    st.markdown("### 🎯 Key Takeaways")
+    
+    take1, take2 = st.columns(2)
+    with take1:
+        st.markdown("""
+        <div class="info-card">
+            <h3>✅ Strengths by Model</h3>
+            <p>
+            <strong>BERTopic:</strong><br/>
+            • Best for short, noisy text (tweets)<br/>
+            • Semantic understanding → better coherence<br/>
+            • Auto-detects topic count<br/>
+            • True online learning via merge_models()<br/>
+            • HITL support for human refinement<br/><br/>
+            <strong>LDA:</strong><br/>
+            • Established benchmark (Blei 2003)<br/>
+            • Probabilistic reasoning<br/>
+            • Soft topic assignments<br/><br/>
+            <strong>NMF:</strong><br/>
+            • Fast, deterministic<br/>
+            • Often beats LDA on short text<br/>
+            • Interpretable parts-based decomposition
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with take2:
+        st.markdown("""
+        <div class="info-card">
+            <h3>⚠️ Limitations by Model</h3>
+            <p>
+            <strong>BERTopic:</strong><br/>
+            • Computationally expensive (Sentence-BERT)<br/>
+            • Requires pre-trained embeddings<br/>
+            • Hard assignments (no mixed-topic docs)<br/><br/>
+            <strong>LDA:</strong><br/>
+            • BoW loses word order & semantics<br/>
+            • K must be fixed upfront<br/>
+            • Poor on short text (sparse BoW)<br/>
+            • No online learning<br/><br/>
+            <strong>NMF:</strong><br/>
+            • No semantics (TF-IDF limitations)<br/>
+            • K must be fixed upfront<br/>
+            • No online learning
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    st.markdown("""
+    ### 📈 Evaluation Results
+    
+    See the **Model Benchmarking** page for live temporal comparison of **Coherence (C_v)**, **Diversity**, and **Silhouette Score** across all three models on your active dataset.
+    
+    **Note on metric comparisons:**
+    - **Coherence (C_v)**: Directly comparable — all three use Gensim's C_v with same parameters
+    - **Diversity**: NOT directly comparable — BERTopic's c-TF-IDF penalizes overlap more than LDA's Dirichlet, NMF is intermediate
+    - **Silhouette**: NOT directly comparable — computed in different feature spaces (UMAP vs TF-IDF)
     """)
 
 render_footer()

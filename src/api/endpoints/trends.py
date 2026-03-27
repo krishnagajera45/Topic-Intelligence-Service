@@ -7,7 +7,6 @@ from src.utils import setup_logger
 
 router = APIRouter()
 logger = setup_logger(__name__)
-storage = StorageManager()
 
 
 @router.get("", response_model=List[TrendResponse])
@@ -18,6 +17,7 @@ async def get_trends(
 ):
     """Get topic counts across time windows."""
     try:
+        storage = StorageManager()
         logger.debug(f"Fetching trends: topic_id={topic_id}, start={start_date}, end={end_date}")
         assignments = storage.load_doc_assignments(topic_id=topic_id)
         

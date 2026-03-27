@@ -21,8 +21,8 @@ config = load_config()
 
 # Create FastAPI app
 app = FastAPI(
-    title="TwCS Topic Modeling API",
-    description="REST API for Twitter Customer Support topic modeling system",
+    title=f"{config.active_dataset.replace('_', ' ').title()} Topic Modeling API",
+    description="REST API for topic modeling system",
     version="0.1.0"
 )
 
@@ -73,8 +73,9 @@ app.include_router(nmf_metrics.router, prefix="/api/v1/nmf", tags=["NMF Metrics"
 async def root():
     """Root endpoint."""
     return {
-        "message": "TwCS Topic Modeling API",
+        "message": f"{config.active_dataset.replace('_', ' ').title()} Topic Modeling API",
         "version": "0.1.0",
+        "dataset": config.active_dataset,
         "docs": "/docs"
     }
 

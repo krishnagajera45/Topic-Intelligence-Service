@@ -118,7 +118,7 @@ def bertopic_modeling_flow(
     })
     
     # Maintain cumulative assignments and corpus
-    assignments_path = "outputs/assignments/doc_assignments.csv"
+    assignments_path = config.storage.doc_assignments_path
     model_corpus_path = str(Path(config.storage.current_model_path).parent / (Path(config.storage.current_model_path).stem + "_corpus.json"))
     
     try:

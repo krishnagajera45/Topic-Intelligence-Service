@@ -14,7 +14,8 @@ router = APIRouter()
 logger = setup_logger(__name__)
 config = load_config()
 storage = StorageManager(config)
-version_manager = ModelVersionManager()
+_model_base_dir = str(Path(config.storage.current_model_path).parent.parent)
+version_manager = ModelVersionManager(base_dir=_model_base_dir)
 
 
 @router.post("/merge", response_model=StatusResponse)

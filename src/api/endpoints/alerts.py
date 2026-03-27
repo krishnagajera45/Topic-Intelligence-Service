@@ -7,13 +7,13 @@ from src.utils import setup_logger
 
 router = APIRouter()
 logger = setup_logger(__name__)
-storage = StorageManager()
 
 
 @router.get("", response_model=List[AlertResponse])
 async def get_alerts(limit: int = 50):
     """Get recent drift alerts."""
     try:
+        storage = StorageManager()
         logger.debug(f"Fetching alerts with limit={limit}")
         alerts_df = storage.load_drift_alerts(limit=limit)
         
@@ -33,6 +33,7 @@ async def get_alerts(limit: int = 50):
 async def get_latest_alert():
     """Get the most recent drift alert."""
     try:
+        storage = StorageManager()
         logger.debug("Fetching latest alert")
         alerts_df = storage.load_drift_alerts(limit=1)
         

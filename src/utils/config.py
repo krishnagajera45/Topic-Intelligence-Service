@@ -1,4 +1,4 @@
-"""Configuration management for TwCS Topic Modeling system."""
+"""Configuration management for Topic Modeling system."""
 import yaml
 from pathlib import Path
 from typing import Dict, Any
@@ -6,13 +6,23 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class DatasetProfile:
+    """Per-dataset configuration profile."""
+    raw_csv_path: str
+    id_column: str
+    text_column: str
+    timestamp_column: str
+    id_prefix: str = "doc"
+    default_start: str = "2017-10-01"
+    clean_mode: str = "general"   # "twitter" | "general"
+    min_tokens: int = 5
+    sample_csv_path: str = ""
+
+
+@dataclass
 class DataConfig:
     """Data-related configuration."""
-    raw_csv_path: str
     processed_parquet_dir: str
-    sample_csv_path: str
-    timestamp_column: str = "created_at"
-    text_column: str = "text"
 
 
 @dataclass
@@ -44,6 +54,7 @@ class StorageConfig:
     current_model_path: str
     previous_model_path: str
     state_file: str
+    metrics_dir: str = "outputs/metrics"
 
 
 @dataclass
@@ -120,8 +131,22 @@ class LDAConfig:
 
 
 @dataclass
+class NMFConfig:
+    """NMF model configuration for comparison."""
+    enabled: bool = True
+    num_topics: str = "auto"
+    max_iter: int = 400
+    alpha_W: float = 0.1
+    alpha_H: float = 0.1
+    max_features: int = 5000
+    top_n_words: int = 10
+
+
+@dataclass
 class Config:
     """Main configuration object."""
+    active_dataset: str
+    dataset: DatasetProfile
     data: DataConfig
     model: ModelConfig
     storage: StorageConfig
@@ -132,6 +157,7 @@ class Config:
     scheduler: SchedulerConfig
     prefect: PrefectConfig
     lda: LDAConfig = None  # Optional LDA config
+    nmf: NMFConfig = None  # Optional NMF config
 
 
 def load_config(config_path: str = "config/config.yaml") -> Config:
@@ -151,17 +177,41 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
     with open(config_file, 'r') as f:
         config_dict = yaml.safe_load(f)
     
+    # Resolve active dataset
+    active = config_dict['active_dataset']
+    datasets = config_dict.get('datasets', {})
+    if active not in datasets:
+        raise ValueError(
+            f"active_dataset '{active}' not found in datasets. "
+            f"Available: {list(datasets.keys())}"
+        )
+    ds_profile = DatasetProfile(**datasets[active])
+
+    # Interpolate {dataset} placeholders in storage / mlflow / data paths
+    def _interpolate(d: dict, key: str = "dataset", value: str = active) -> dict:
+        out = {}
+        for k, v in d.items():
+            out[k] = v.replace(f"{{{key}}}", value) if isinstance(v, str) else v
+        return out
+
+    storage_dict = _interpolate(config_dict['storage'])
+    mlflow_dict = _interpolate(config_dict['mlflow'])
+    data_dict = _interpolate(config_dict['data'])
+
     return Config(
-        data=DataConfig(**config_dict['data']),
+        active_dataset=active,
+        dataset=ds_profile,
+        data=DataConfig(**data_dict),
         model=ModelConfig(**config_dict['model']),
-        storage=StorageConfig(**config_dict['storage']),
-        mlflow=MLflowConfig(**config_dict['mlflow']),
+        storage=StorageConfig(**storage_dict),
+        mlflow=MLflowConfig(**mlflow_dict),
         ollama=OllamaConfig(**config_dict.get('ollama', {})),
         api=APIConfig(**config_dict['api']),
         dashboard=DashboardConfig(**config_dict['dashboard']),
         scheduler=SchedulerConfig(**config_dict['scheduler']),
         prefect=PrefectConfig(**config_dict.get('prefect', {})),
-        lda=LDAConfig(**config_dict.get('lda', {})) if 'lda' in config_dict else None
+        lda=LDAConfig(**config_dict.get('lda', {})) if 'lda' in config_dict else None,
+        nmf=NMFConfig(**config_dict.get('nmf', {})) if 'nmf' in config_dict else None
     )
 
 

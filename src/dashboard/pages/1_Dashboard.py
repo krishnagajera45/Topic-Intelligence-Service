@@ -1,5 +1,5 @@
 """
-Dashboard — TwCS Online Topic Modeling System.
+Dashboard — Online Topic Modeling System.
 
 Central command center: cumulative vs current-batch statistics, batch explorer
 with synced bubble timeline, topic distribution, keyword heatmap, and trends.
@@ -23,8 +23,12 @@ from src.dashboard.components.theme import (
 )
 
 # ── Page Config ───────────────────────────────────────────────────────────────
+from src.utils.config import load_config as _load_cfg
+_cfg = _load_cfg()
+_ds_title = _cfg.active_dataset.replace("_", " ").title()
+
 st.set_page_config(
-    page_title="Dashboard · TwCS Topic Modeling",
+    page_title=f"Dashboard · {_ds_title} Topic Modeling",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",

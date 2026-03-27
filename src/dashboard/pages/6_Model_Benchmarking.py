@@ -314,7 +314,23 @@ if batch_ids:
                 row[f"{prefix} Silhouette"] = round(b.get("silhouette_score") or 0, 4)
                 row[f"{prefix} Topics"]     = b.get("num_topics", "—")
         rows.append(row)
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    
+    # Add average row
+    avg_row = {"Batch ID": "───── AVERAGE ─────", "Timestamp": "—"}
+    for prefix, enabled, coh, div, sil in [
+        ("BERTopic", True, bt_c, bt_d, bt_s),
+        ("LDA", show_lda, lda_c, lda_d, lda_s),
+        ("NMF", show_nmf, nmf_c, nmf_d, nmf_s),
+    ]:
+        if enabled:
+            avg_row[f"{prefix} Coherence"]  = round(safe_avg(coh), 4)
+            avg_row[f"{prefix} Diversity"]  = round(safe_avg(div), 4)
+            avg_row[f"{prefix} Silhouette"] = round(safe_avg(sil), 4)
+            avg_row[f"{prefix} Topics"]     = "—"
+    rows.append(avg_row)
+    
+    df = pd.DataFrame(rows)
+    st.dataframe(df, use_container_width=True, hide_index=True)
 else:
     st.info("Run the pipeline to populate the batch metrics table.")
 
@@ -362,7 +378,7 @@ with st.expander("⚙️ Experimental Setup — Three-Way Comparison"):
     st.markdown("""
 | Parameter | BERTopic | LDA | NMF |
 |-----------|----------|-----|-----|
-| **Dataset** | TwCS inbound tweets | Same | Same |
+| **Dataset** | Active dataset | Same | Same |
 | **Preprocessing** | Minimal | Full NLP | TF-IDF stopwords |
 | **Features** | Sentence-BERT 384-dim | BoW | TF-IDF (5k) |
 | **Algorithm** | HDBSCAN | Variational Bayes | Coord. Descent |

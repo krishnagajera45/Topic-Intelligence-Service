@@ -47,62 +47,15 @@ def generate_batch_id(window_start: str, window_end: str = None) -> str:
 
 def clean_text(text: str) -> str:
     """
-    Clean tweet text by removing URLs, mentions, and extra whitespace.
+    Clean text by removing URLs, mentions, and extra whitespace.
     
-    Args:
-        text: Raw tweet text
-        
-    Returns:
-        Cleaned text
+    NOTE: This is kept for backward compatibility. New code should use
+    ``src.data.preprocessing.clean_for_dataset(text, mode)`` instead.
+    
+    Defaults to the *twitter* preset (removes @mentions, agent signatures, etc.).
     """
-    if not isinstance(text, str):
-        return ""
-    
-    # Decode HTML entities (e.g., &amp; -> &)
-    text = html.unescape(text)
-    
-    # Normalize unicode (fix curly quotes, odd apostrophes, etc.)
-    text = unicodedata.normalize("NFKC", text)
-    
-    # Remove URLs
-    text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-    
-    # Remove @mentions
-    text = re.sub(r'@\w+', '', text)
-    
-    # Remove hashtags (keep the word)
-    text = re.sub(r'#(\w+)', r'\1', text)
-    
-    # Remove outbound agent signatures (e.g., ^MM, /AY) at end of message
-    text = re.sub(r'(\s*[\^/][A-Za-z]{1,3})+$', '', text)
-    
-    # Mask phone-like numbers (privacy + noise reduction)
-    text = re.sub(r'\b(?:\d[\s\-\.\(\)]*){7,}\d\b', '<PHONE>', text)
-    
-    # Normalize version-like strings (e.g., 8.4.22 -> <VERSION>)
-    text = re.sub(r'\b\d+(?:\.\d+){1,}\b', '<VERSION>', text)
-    
-    
-    # Remove emojis and pictographs (reduce topic noise)
-    text = re.sub(
-        r'[\U0001F300-\U0001F6FF\U0001F700-\U0001FAFF\U00002700-\U000027BF\U0001F1E6-\U0001F1FF]+',
-        '',
-        text
-    )
-    
-    # Normalize repeated punctuation (e.g., !!! -> !, ??? -> ?)
-    text = re.sub(r'([!?\.]){2,}', r'\1', text)
-    
-    # Remove extra whitespace
-    text = re.sub(r'\s+', ' ', text)
-    
-    # Strip leading/trailing whitespace
-    text = text.strip()
-    
-    # Convert to lowercase
-    text = text.lower()
-    
-    return text
+    from src.data.preprocessing import clean_text_twitter
+    return clean_text_twitter(text)
 
 
 def parse_timestamp(timestamp_str: str) -> datetime:

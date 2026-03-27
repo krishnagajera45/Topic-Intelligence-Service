@@ -23,7 +23,7 @@ def complete_pipeline_flow(
     end_date: Optional[str] = None
 ):
     """
-    Master flow orchestrating the complete TwCS topic modeling pipeline.
+    Master flow orchestrating the complete topic modeling pipeline.
     
     This flow automatically:
     1. Data Ingestion (ETL)
@@ -40,14 +40,15 @@ def complete_pipeline_flow(
     """
     logger = get_run_logger()
     
+    config = load_config()
+    
     logger.info("=" * 80)
     logger.info(f"Starting complete pipeline flow at {datetime.now()}")
+    logger.info(f"Active dataset: {config.active_dataset}")
     logger.info("=" * 80)
     
     # Start timing
     pipeline_start_time = time.time()
-    
-    config = load_config()
     storage = StorageManager(config)
     
     # Get Prefect context for MLflow linking
@@ -65,7 +66,7 @@ def complete_pipeline_flow(
         if last_processed:
             start_dt = datetime.fromisoformat(last_processed)
         else:
-            start_dt = datetime(2017, 10, 1)  # TwCS dataset start
+            start_dt = datetime.fromisoformat(config.dataset.default_start)
         
         window_minutes = getattr(config.scheduler, "window_minutes", None)
         if window_minutes:
@@ -106,10 +107,10 @@ def complete_pipeline_flow(
         logger.info("Step 1: Running data ingestion flow")
         step1_start = time.time()
         
-        parquet_path = f"data/processed/{batch_id}.parquet"
+        parquet_path = f"{config.data.processed_parquet_dir}{batch_id}.parquet"
         
         df = data_ingestion_flow(
-            csv_path=config.data.raw_csv_path,
+            csv_path=config.dataset.raw_csv_path,
             output_parquet=parquet_path,
             start_date=start_date,
             end_date=end_date,
@@ -169,7 +170,7 @@ def complete_pipeline_flow(
         
         # Log BERTopic metrics to MLflow (from saved file)
         try:
-            metrics_path = Path("outputs/metrics/bertopic_metrics.json")
+            metrics_path = Path(config.storage.metrics_dir) / "bertopic_metrics.json"
             if metrics_path.exists():
                 with open(metrics_path, 'r') as f:
                     bt_data = json.load(f)
@@ -368,7 +369,7 @@ def complete_pipeline_flow(
         logger.info("=" * 80)
         try:
             corpus_path = Path(config.storage.current_model_path).parent / (Path(config.storage.current_model_path).stem + "_corpus.json")
-            assignments_path = Path("outputs/assignments/doc_assignments.csv")
+            assignments_path = Path(config.storage.doc_assignments_path)
             if corpus_path.exists() and assignments_path.exists():
                 with open(corpus_path, 'r') as f:
                     corpus = json.load(f)

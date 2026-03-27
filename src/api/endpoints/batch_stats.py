@@ -5,7 +5,6 @@ from src.utils import StorageManager, setup_logger
 
 router = APIRouter()
 logger = setup_logger(__name__)
-storage = StorageManager()
 
 
 @router.get("")
@@ -35,6 +34,7 @@ async def get_batch_stats() -> Dict[str, Any]:
         }
     """
     try:
+        storage = StorageManager()
         assignments = storage.load_doc_assignments()
 
         if assignments.empty:

@@ -6,13 +6,13 @@ from src.utils import setup_logger
 
 router = APIRouter()
 logger = setup_logger(__name__)
-storage = StorageManager()
 
 
 @router.get("", response_model=PipelineStatusResponse)
 async def get_pipeline_status():
     """Get ETL pipeline status."""
     try:
+        storage = StorageManager()
         state = storage.load_processing_state()
         
         return PipelineStatusResponse(

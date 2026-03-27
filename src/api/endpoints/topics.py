@@ -7,13 +7,13 @@ from src.utils import setup_logger
 
 router = APIRouter()
 logger = setup_logger(__name__)
-storage = StorageManager()
 
 
 @router.get("/current", response_model=List[TopicResponse])
 async def get_current_topics():
     """Get current model topics with labels, keywords, and sizes."""
     try:
+        storage = StorageManager()
         logger.debug("Fetching current topics metadata")
         topics = storage.load_topics_metadata()
         logger.info(f"Retrieved {len(topics)} topics")
@@ -27,6 +27,7 @@ async def get_current_topics():
 async def get_topic_details(topic_id: int):
     """Get details for a specific topic."""
     try:
+        storage = StorageManager()
         logger.debug(f"Fetching details for topic_id={topic_id}")
         topics = storage.load_topics_metadata()
         
@@ -48,6 +49,7 @@ async def get_topic_details(topic_id: int):
 async def get_topic_examples(topic_id: int, limit: int = 10):
     """Get example documents for a topic with text content."""
     try:
+        storage = StorageManager()
         logger.debug(f"Fetching examples for topic_id={topic_id}, limit={limit}")
         assignments = storage.load_doc_assignments(topic_id=topic_id)
         
@@ -62,7 +64,9 @@ async def get_topic_examples(topic_id: int, limit: int = 10):
         import pandas as pd
         from pathlib import Path
         
-        processed_dir = Path("data/processed")
+        from src.utils.config import load_config
+        cfg = load_config()
+        processed_dir = Path(cfg.data.processed_parquet_dir)
         unique_batches = examples['batch_id'].unique()
         
         # Load all relevant batch files and concat
