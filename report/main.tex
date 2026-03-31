@@ -66,7 +66,7 @@ The main contributions of this project are as follows:
     \item A governed \hitl workflow with audit logs, model version history, and rollback support.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section II reviews related work. Section III defines project scope. Section IV describes system architecture. Sections V--VIII present processing methodology, model design, and monitoring mechanisms. Section IX discusses evaluation and results. Section X analyzes strengths and limitations, and Section XI concludes the report.
+The remainder of this paper is organized as follows. Section II reviews related work. Section III presents system overview and scope. Section IV describes system architecture. Sections V--VIII present processing methodology, model design, and monitoring mechanisms. Section IX discusses evaluation and results. Section X analyzes strengths and limitations, and Section XI concludes the report.
 
 \section{Related Work}
 \subsection{Classical Topic Modeling Baselines}
@@ -78,25 +78,35 @@ Recent methods leverage contextual embeddings to improve semantic grouping quali
 \subsection{Online Operation, Drift, and Human Oversight}
 Most educational topic modeling workflows remain offline and single-pass, whereas deployed systems require temporal updates, monitoring, and analyst control. Practical MLOps patterns emphasize orchestration, reproducibility, and lifecycle observability \cite{prefect,mlflow}. In this context, the present work contributes an implementation-focused integration: batch-recurring model updates via train-and-merge, multi-signal topic drift monitoring, and a human-in-the-loop interface for relabeling, topic consolidation, version tracking, and rollback. This positioning distinguishes the project from standalone modeling experiments by addressing both modeling quality and operational governance.
 
-\section{Project Objective and Implemented Scope}
-The implemented system is designed around a clear separation between a \emph{primary operational model} and \emph{comparison models}. The primary operational model is \bertopic. It is the model used for topic discovery on incoming batches, topic metadata generation, user-facing topic inspection, and inference on unseen text. The comparison models are \lda and \nmf. Their role is evaluative rather than operational: they provide reference metrics so that the behavior of the semantic topic model can be contrasted with two classical alternatives.
+\section{System Overview and Scope}
+This section formalizes the goal of the project and the precise scope of the implemented system. Let a corpus arrive as a sequence of time-indexed batches \(\{\mathcal{B}_t\}_{t=1}^{T}\), where each batch \(\mathcal{B}_t=\{d_i\}\) contains documents observed within a configured time window. The system is designed to (i) extract a human-interpretable topic structure from each window, (ii) maintain an evolving deployed topic model \(\mathcal{M}_t\) across windows, and (iii) provide monitoring signals that quantify when topic structure or usage has shifted sufficiently to require analyst attention. The emphasis is operational: the output is not only a set of topics, but a repeatable lifecycle that supports ingestion, update, evaluation, monitoring, and governance.
 
-This distinction is important because it clarifies the meaning of the project's ``three models.'' In this implementation, the phrase does not refer to three different saved \bertopic checkpoints or three abstract conceptual layers. It refers specifically to three topic-modeling approaches: \bertopic, \lda, and \nmf. Among these, only \bertopic serves as the live model around which the rest of the monitoring system is organized.
+\subsection{Operational vs. comparative modeling}
+The implementation uses a role-separated modeling strategy. \bertopic is treated as the \emph{operational} model: it is the model that produces the deployed topic catalog, supports inference on unseen text, and drives the dashboard-level analytics. In contrast, \lda and \nmf are implemented as \emph{comparative baselines}. They are executed to contextualize topic quality under a shared evaluation protocol (e.g., coherence, diversity, and clustering separability), but they are not used for serving or human-in-the-loop editing. This distinction is methodologically important because it prevents the evaluation from implicitly assuming that a single modeling family is correct by definition.
 
-The implemented scope of the system includes the following capabilities.
-\begin{enumerate}[leftmargin=*,itemsep=2pt]
-    \item Recurring ingestion of dataset-specific text batches from a configured data source.
-    \item Preprocessing that adapts to the active dataset profile.
-    \item Topic modeling with \bertopic as the main model.
-    \item Comparative evaluation with \lda and \nmf.
-    \item Historical monitoring through batch identifiers and persistent outputs.
-    \item Drift detection between current and prior topic model states.
-    \item Interactive inspection through a dashboard.
-    \item Human-in-the-loop relabeling and topic merge operations.
-    \item Model versioning and rollback support.
-\end{enumerate}
+\subsection{Temporal update principle: train-and-merge}
+The defining design choice for temporal operation is a batch-recurring \emph{train-and-merge} update mechanism. For each new batch \(\mathcal{B}_t\), the system trains a fresh \bertopic model \(\mathcal{F}_t\) using the batch documents, then merges \(\mathcal{F}_t\) with the currently deployed model \(\mathcal{M}_{t-1}\) using a similarity-thresholded integration step. The resulting merged model becomes the new deployed state \(\mathcal{M}_t\). Conceptually, this implements an engineering trade-off: the approach is simpler and more controllable than fully streaming optimization, while still enabling new topics to emerge and old topics to persist across windows. It also aligns with model governance, since each update produces a versionable artifact that can be archived and rolled back.
 
-The implementation therefore goes beyond a standard classroom demonstration of topic modeling. At the same time, it is not a fully generalized production platform. Some features remain partial, some data dependencies are external to the uploaded archive, and some parts of the codebase still reflect an earlier single-dataset orientation. These limitations are discussed later rather than hidden.
+\subsection{Monitoring and governance objective}
+Temporal operation makes monitoring a first-class requirement. The system therefore computes drift signals between consecutive deployed states to detect meaningful change. In the implemented design, drift is not reduced to a single scalar; instead, multiple complementary indicators are tracked, including changes in topic prevalence (distribution shift), movement of topic centroids in embedding space (semantic shift), divergence of topic keyword distributions (descriptor shift), and topic birth/death events (structural shift). These signals support alerting and prioritization in the user interface. In addition, the system exposes human-in-the-loop controls that allow analysts to impose interpretability and consolidation constraints (topic relabeling and merging) while preserving an audit trail and version history.
+
+Figure~\ref{fig:e2e-overview} summarizes the end-to-end system at a conceptual level. It should be read as the operational contract of the platform: each batch window produces updated model state, persisted artifacts, and monitoring outputs that are accessible through API and dashboard layers.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.92\columnwidth}{\centering
+\vspace{0.75cm}
+Placeholder (use your existing end-to-end diagram).\\
+Suggested: ingestion $\rightarrow$ preprocessing $\rightarrow$ BERTopic train/merge\\
+$\rightarrow$ assignments/metadata $\rightarrow$ LDA/NMF benchmarking $\rightarrow$ drift alerts\\
+$\rightarrow$ FastAPI serving $\rightarrow$ Streamlit dashboard $\rightarrow$ HITL relabel/merge/rollback.
+\vspace{0.75cm}}}
+\caption{End-to-end overview of the implemented online topic monitoring system.}
+\label{fig:e2e-overview}
+\end{figure}
+
+\subsection{Scope Boundaries}
+The system is intentionally scoped to a batch-recurring operational setting. First, updates are performed at window granularity rather than via continuous streaming optimization. Second, \hitl support is strongest for relabeling and merging; topic splitting is not implemented as a fully automated semantic operation. Third, while the software stack is reproducible, complete experiment replay depends on access to the external raw datasets referenced in configuration. These boundaries define the valid interpretation of the experimental evidence presented later.
 
 \section{System Architecture}
 The project is implemented as a modular analytics system rather than a monolithic script. At a high level, the architecture has four layers: orchestration, modeling, serving, and interaction.
