@@ -81,3 +81,10 @@ outputs/*
 outputs/metrics/bertopic_metrics.json
 outputs/metrics/lda_metrics.json
 .DS_Store
+report/main.aux
+.gitignore
+report/main.fdb_latexmk
+report/main.fls
+.gitignore
+report/main.synctex.gz
+report/main.out

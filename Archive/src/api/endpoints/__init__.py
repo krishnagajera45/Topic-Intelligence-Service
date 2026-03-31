@@ -1,2 +1,0 @@
-"""Endpoints package initialization."""
-
