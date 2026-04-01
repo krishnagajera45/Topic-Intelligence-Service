@@ -1,0 +1,22 @@
+%% Figure: layered architecture (matches main.tex TikZ Figure~\ref{fig:architecture})
+%% Render: npx @mermaid-js/mermaid-cli -i fig1-layered-architecture.mmd -o fig1-layered-architecture.svg
+%% Or paste at https://mermaid.live
+%%{init: {"theme": "neutral", "flowchart": {"curve": "linear"}}}%%
+flowchart TB
+    subgraph L1["Human-in-the-loop + interaction"]
+        H["Streamlit dashboard; relabel, merge, rollback"]
+    end
+
+    subgraph L2["Serving"]
+        S["FastAPI: inference, topic APIs, metrics / alerts"]
+    end
+
+    subgraph L3["Orchestration"]
+        direction LR
+        M["Modeling"]
+        D["Drift detection"]
+        P["Persistence"]
+    end
+
+    L1 <--> L2
+    L2 <--> L3

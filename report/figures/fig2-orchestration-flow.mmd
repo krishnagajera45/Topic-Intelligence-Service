@@ -1,0 +1,53 @@
+%% Figure 2 — Orchestration strategy (export: fig2-orchestration-flow.png via mermaid.live)
+%% Readable in papers: neutral theme + grouped stages + linear control flow.
+%%{init: {'theme': 'neutral', 'flowchart': {'curve': 'basis', 'padding': 12}}}%%
+
+flowchart TB
+    subgraph TRG["① Temporal trigger"]
+        SCH["Schedule / cron or manual run"]
+        WIN["Time-thresholded window\n(batch ID, time range)"]
+        SCH --> WIN
+    end
+
+    subgraph DPL["② Data pipeline"]
+        ING["Ingest + clean + dedupe"]
+        ART["Modeling-ready corpus\n(Parquet, cumulative JSON, assignments)"]
+        ING --> ART
+    end
+
+    subgraph OPM["③ Operational ML (BERTopic)"]
+        TRN["Train on batch\n(seed or batch-fit)"]
+        MRG["Merge with deployed model\n(similarity threshold τ)"]
+        TRN --> MRG
+    end
+
+    subgraph BEN["④ Benchmarks (optional)"]
+        BL["LDA / NMF + metrics\n(same cumulative corpus, aligned $K$)"]
+    end
+
+    subgraph DRM["⑤ Monitoring"]
+        DR["Drift detection\nvs. previous deployed state"]
+    end
+
+    subgraph DEL["⑥ Handoff to serving"]
+        PST["Persist versioned checkpoints\nmetadata, alerts, MLflow run"]
+        SRV["Serving + dashboards consume\nlatest deployed model"]
+        PST --> SRV
+    end
+
+    WIN --> ING
+    ART --> TRN
+    MRG --> BL
+    BL --> DR
+    DR --> PST
+
+    classDef trig fill:#e8eef7,stroke:#4a5568,stroke-width:1px
+    classDef data fill:#eaf4ea,stroke:#4a5568,stroke-width:1px
+    classDef ml fill:#fdf6e3,stroke:#4a5568,stroke-width:1px
+    classDef mon fill:#ffecec,stroke:#4a5568,stroke-width:1px
+    classDef out fill:#f3eeff,stroke:#4a5568,stroke-width:1px
+    class SCH,WIN trig
+    class ING,ART data
+    class TRN,MRG,BL ml
+    class DR mon
+    class PST,SRV out

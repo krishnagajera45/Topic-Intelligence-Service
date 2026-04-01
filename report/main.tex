@@ -66,17 +66,20 @@ The main contributions of this project are as follows:
     \item A governed \hitl workflow with audit logs, model version history, and rollback support.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section II reviews related work. Section III presents system overview and scope. Section IV describes system architecture. Sections V--VIII present processing methodology, model design, and monitoring mechanisms. Section IX discusses evaluation and results. Section X analyzes strengths and limitations, and Section XI concludes the report.
+The remainder of this paper is organized as follows. Section~II reviews related work, including the baseline models. Section~III presents the system overview and scope. Section~IV describes the complete system architecture---orchestration, modeling, drift detection with formal definitions, human-in-the-loop governance, serving, and interaction---together with the unified pipeline algorithm. Section~V presents experimental evaluation: corpora, preprocessing, evidence protocol, and benchmark results. Sections~VI--VIII discuss implementation strengths, limitations, and conclusions.
 
 \section{Related Work}
-\subsection{Classical Topic Modeling Baselines}
-Probabilistic and matrix-factorization approaches remain foundational in topic modeling. \lda models documents as mixtures of latent topics and topics as distributions over words \cite{lda}. \nmf factorizes a document-term matrix into non-negative latent components and often produces interpretable keyword groups \cite{nmf}. These methods are computationally efficient and widely studied, but they are strongly tied to lexical overlap and may degrade on short, noisy, or highly paraphrastic text streams.
+\subsection{Latent Dirichlet Allocation}
+\lda is a generative probabilistic model that represents each document as a mixture of latent topics and each topic as a distribution over words \cite{lda}. Training is typically performed via variational inference or collapsed Gibbs sampling. \lda remains a widely adopted baseline due to its strong theoretical foundations and ease of interpretation. However, it operates in bag-of-words space and relies on lexical co-occurrence, which limits its effectiveness on short, noisy, or paraphrastic text where surface-word overlap is sparse. In the present system, \lda is retained as a probabilistic baseline to provide a classical reference point for topic quality comparison. Its inclusion allows the evaluation to distinguish whether quality gains from the primary model are attributable to semantic embeddings or merely to preprocessing choices.
 
-\subsection{Semantic Topic Modeling with BERTopic}
-Recent methods leverage contextual embeddings to improve semantic grouping quality. \bertopic combines sentence embeddings \cite{sentencetransformers}, dimensionality reduction through UMAP \cite{umap}, density-based clustering with HDBSCAN \cite{hdbscan}, and class-based TF--IDF topic representation \cite{bertopic}. This pipeline is particularly suitable for evolving corpora in which semantically related documents may share limited surface vocabulary.
+\subsection{Non-negative Matrix Factorization}
+\nmf decomposes a non-negative document-term matrix $\mathbf{V} \approx \mathbf{W}\mathbf{H}$ into a document-topic matrix $\mathbf{W}$ and a topic-word matrix $\mathbf{H}$, subject to non-negativity constraints \cite{nmf}. The resulting topic-word vectors tend to produce sharp, interpretable keyword groups. Unlike \lda, \nmf is not probabilistic; it optimizes a reconstruction loss (typically Frobenius norm or KL divergence) with optional regularization. In practice, \nmf can behave differently from \lda even on identical corpora, often yielding tighter lexical clusters but with greater sensitivity to vocabulary size and sparsity. The present implementation includes stability-oriented engineering decisions in the \nmf path---such as fallback regularization and minimum-topic guards---to handle the practical difficulties of applying matrix factorization to small, sparse short-text batches.
+
+\subsection{BERTopic and Neural Topic Modeling}
+\bertopic addresses the semantic limitations of lexical methods by combining pre-trained sentence embeddings \cite{sentencetransformers} with dimensionality reduction via UMAP \cite{umap}, density-based clustering via HDBSCAN \cite{hdbscan}, and class-based TF--IDF topic representation \cite{bertopic}\cite{Pavithra2024TopicMF}. This pipeline groups documents by meaning rather than surface overlap, making it particularly suitable for evolving corpora with limited vocabulary consistency. The present work selects \bertopic as the operational model for this reason and uses \lda and \nmf as complementary baselines to support a three-way comparative evaluation.
 
 \subsection{Online Operation, Drift, and Human Oversight}
-Most educational topic modeling workflows remain offline and single-pass, whereas deployed systems require temporal updates, monitoring, and analyst control. Practical MLOps patterns emphasize orchestration, reproducibility, and lifecycle observability \cite{prefect,mlflow}. In this context, the present work contributes an implementation-focused integration: batch-recurring model updates via train-and-merge, multi-signal topic drift monitoring, and a human-in-the-loop interface for relabeling, topic consolidation, version tracking, and rollback. This positioning distinguishes the project from standalone modeling experiments by addressing both modeling quality and operational governance.
+Most topic modeling workflows are offline and single-pass, whereas deployed systems require temporal updates, distributional monitoring, and analyst control. Practical MLOps patterns emphasize orchestration, reproducibility, and lifecycle observability \cite{prefect,mlflow}. The present work contributes an implementation-focused integration: batch-recurring model updates via train-and-merge, multi-signal topic drift monitoring, and a human-in-the-loop interface for relabeling, topic consolidation, version tracking, and rollback. This positioning distinguishes the project from standalone modeling experiments by addressing both modeling quality and operational governance.
 
 \section{System Overview and Scope}
 This section formalizes the goal of the project and the precise scope of the implemented system. Let a corpus arrive as a sequence of time-indexed batches \(\{\mathcal{B}_t\}_{t=1}^{T}\), where each batch \(\mathcal{B}_t=\{d_i\}\) contains documents observed within a configured time window. The system is designed to (i) extract a human-interpretable topic structure from each window, (ii) maintain an evolving deployed topic model \(\mathcal{M}_t\) across windows, and (iii) provide monitoring signals that quantify when topic structure or usage has shifted sufficiently to require analyst attention. The emphasis is operational: the output is not only a set of topics, but a repeatable lifecycle that supports ingestion, update, evaluation, monitoring, and governance.
@@ -90,212 +93,291 @@ The defining design choice for temporal operation is a batch-recurring \emph{tra
 \subsection{Monitoring and governance objective}
 Temporal operation makes monitoring a first-class requirement. The system therefore computes drift signals between consecutive deployed states to detect meaningful change. In the implemented design, drift is not reduced to a single scalar; instead, multiple complementary indicators are tracked, including changes in topic prevalence (distribution shift), movement of topic centroids in embedding space (semantic shift), divergence of topic keyword distributions (descriptor shift), and topic birth/death events (structural shift). These signals support alerting and prioritization in the user interface. In addition, the system exposes human-in-the-loop controls that allow analysts to impose interpretability and consolidation constraints (topic relabeling and merging) while preserving an audit trail and version history.
 
-Figure~\ref{fig:e2e-overview} summarizes the end-to-end system at a conceptual level. It should be read as the operational contract of the platform: each batch window produces updated model state, persisted artifacts, and monitoring outputs that are accessible through API and dashboard layers.
+% Figure~\ref{fig:e2e-overview} summarizes the end-to-end system at a conceptual level. It should be read as the operational contract of the platform: each batch window produces updated model state, persisted artifacts, and monitoring outputs that are accessible through API and dashboard layers.
 
-\begin{figure}[t]
-\centering
-\fbox{\parbox{0.92\columnwidth}{\centering
-\vspace{0.75cm}
-Placeholder (use your existing end-to-end diagram).\\
-Suggested: ingestion $\rightarrow$ preprocessing $\rightarrow$ BERTopic train/merge\\
-$\rightarrow$ assignments/metadata $\rightarrow$ LDA/NMF benchmarking $\rightarrow$ drift alerts\\
-$\rightarrow$ FastAPI serving $\rightarrow$ Streamlit dashboard $\rightarrow$ HITL relabel/merge/rollback.
-\vspace{0.75cm}}}
-\caption{End-to-end overview of the implemented online topic monitoring system.}
-\label{fig:e2e-overview}
-\end{figure}
+% \begin{figure}[t]
+% \centering
+% \fbox{\parbox{0.92\columnwidth}{\centering
+% \vspace{0.75cm}
+% Placeholder (use your existing end-to-end diagram).\\
+% Suggested: ingestion $\rightarrow$ preprocessing $\rightarrow$ BERTopic train/merge\\
+% $\rightarrow$ assignments/metadata $\rightarrow$ LDA/NMF benchmarking $\rightarrow$ drift alerts\\
+% $\rightarrow$ FastAPI serving $\rightarrow$ Streamlit dashboard $\rightarrow$ HITL relabel/merge/rollback.
+% \vspace{0.75cm}}}
+% \caption{End-to-end overview of the implemented online topic monitoring system.}
+% \label{fig:e2e-overview}
+% \end{figure}
 
 \subsection{Scope Boundaries}
 The system is intentionally scoped to a batch-recurring operational setting. First, updates are performed at window granularity rather than via continuous streaming optimization. Second, \hitl support is strongest for relabeling and merging; topic splitting is not implemented as a fully automated semantic operation. Third, while the software stack is reproducible, complete experiment replay depends on access to the external raw datasets referenced in configuration. These boundaries define the valid interpretation of the experimental evidence presented later.
 
 \section{System Architecture}
-The project is implemented as a modular analytics system rather than a monolithic script. At a high level, the architecture has four layers: orchestration, modeling, serving, and interaction.
+The system is implemented as a layered, modular architecture composed of four principal layers: orchestration, modeling, drift detection, human-in-the-loop, serving and interaction. Each layer encapsulates a well-defined responsibility, communicates with adjacent layers through structured interfaces, and can be independently modified or extended. This separation of concerns is a deliberate engineering choice: it prevents tight coupling between data processing logic, model training routines, API contracts, and user-interface components.
 
-\subsection{Orchestration layer}
-At the orchestration level, the system uses a scheduled or manually triggered batch pipeline. Each run is associated with a time window and a batch identifier. The pipeline determines what data fall inside the current window, processes those documents, updates the primary model, runs benchmarking models if enabled, and stores the outputs required for monitoring and comparison. This design makes the system batch-recurring rather than continuously streaming, which is a practical compromise for a final project: it captures temporal evolution while keeping implementation complexity manageable.
+Figure~\ref{fig:architecture} presents the high-level layered architecture. The remainder of this section describes each layer in detail.
 
-\subsection{Modeling layer}
-The modeling layer contains the main \bertopic pipeline and the two comparison baselines. \bertopic functions as the semantic model that powers discovery, metadata generation, and inference. \lda and \nmf are trained on the same batch to provide comparison metrics such as coherence, diversity, and silhouette-style separability. Conceptually, this layer separates \emph{operational use} from \emph{model assessment}. That separation is a strength because it prevents the project from treating a single model as correct by definition.
-
-\subsection{Serving layer}
-The serving layer exposes analytical outputs through a web API. This allows the dashboard to request topic summaries, trend histories, benchmark metrics, alerts, and inference results without directly coupling the user interface to the training logic. Such a design is more robust and reviewable than placing all modeling, storage, and visualization in one interactive script.
-
-\subsection{Interaction layer}
-The interaction layer is implemented as a dashboard with separate views for overview, current topics, drill-down inspection, drift alerts, inference, benchmarking, and human-in-the-loop operations. From a software engineering perspective, this is important because it turns the project into an analytical tool rather than only a modeling pipeline. A reviewer can understand not just how topics are learned, but also how the system would be used by an analyst.
-
-% TODO: Insert latest architecture diagram here.
 \begin{figure}[t]
 \centering
-\fbox{\parbox{0.92\columnwidth}{\centering
-\vspace{0.95cm}
-Placeholder for updated architecture diagram.\\
-Suggested contents: recurring pipeline, \bertopic as the primary model,\\
-\lda and \nmf benchmarking branches, serving API, dashboard, drift monitoring,\\
-and human-in-the-loop topic maintenance.
-\vspace{0.95cm}}}
-\caption{System architecture of the implemented online topic monitoring platform.}
+\includegraphics[width=0.88\columnwidth,height=0.42\textheight,keepaspectratio]{figures/fig1-image.png}
+\caption{Layered architecture of the online topic monitoring platform.}
 \label{fig:architecture}
 \end{figure}
 
-\section{End-to-End Processing Logic}
-Although the system is modular, its end-to-end logic follows a clear sequence. Each run begins by identifying the active dataset profile and the time window to be processed. The selected data are then loaded and cleaned according to the active profile. After validation and deduplication, the cleaned texts are passed to the main topic modeling stage.
 
-The main topic modeling stage has two modes. If the system has not yet been initialized for the selected dataset, it performs seed training and produces the first deployable \bertopic model. If a current model already exists, the system trains a fresh \bertopic model on the new batch and merges that model with the existing deployed model. This merged model becomes the new current model. The resulting topics are then used to create metadata, produce document-topic assignments, and update persistent outputs for later dashboard use.
+\subsection{Orchestration Layer}
+The orchestration layer governs the temporal execution lifecycle of the system. It is implemented using Prefect \cite{prefect}, which expresses each pipeline run as a directed acyclic graph (DAG) of typed tasks with retries and structured error handling. Operationally, the pattern is \emph{clock-driven then data-driven}: a schedule (cron or manual trigger) fires when a configured time policy elapses, which starts a new run and fixes a batch window $[t_{\text{start}}, t_{\text{end}})$ with a unique batch identifier. That trigger invokes the \emph{data pipeline}---ingestion, cleaning, deduplication, and persistence into batch-scoped stores---so downstream stages always consume consistent, modeling-ready corpora rather than ad hoc files.
 
-After the primary model update, the system can execute \lda and \nmf on the same batch and record their metrics for comparison. If a prior \bertopic state is available, the system also computes drift signals between the current and previous topic configurations. Finally, run-level metrics and state information are recorded so that subsequent batches can be interpreted in temporal context.
+With artifacts in place, the \emph{operational ML} path trains \bertopic on the current window (or seeds an initial model), then merges the batch model into the deployed catalog using a similarity threshold $\tau$, yielding the updated model $\mathcal{M}_t$. Optional \lda and \nmf baselines read the same cumulative corpus for comparable metrics. \emph{Drift detection} then contrasts $\mathcal{M}_t$ with the previous state to populate alerts and dashboard signals. Finally, \emph{persistence} writes versioned checkpoints, assignments, and metadata so the FastAPI serving layer and Streamlit UI can load the new model without manual handoff. Experiment parameters, metrics, and artifact paths are logged to MLflow \cite{mlflow} throughout the run for traceability.
 
-Conceptually, the execution flow can therefore be summarized as:
-\begin{enumerate}[leftmargin=*,itemsep=2pt]
-    \item identify the current data window;
-    \item preprocess and validate the batch;
-    \item update the primary \bertopic model;
-    \item compute metadata and assignments;
-    \item benchmark against \lda and \nmf;
-    \item estimate drift against the previous state;
-    \item expose results for dashboard and API consumption.
-\end{enumerate}
+This design keeps the system batch-recurring: windows are processed in order, complexity stays bounded relative to streaming retraining, and scheduling remains configurable via cron expressions or on-demand execution.
 
-This sequence reflects a monitoring-oriented design. The system is not organized around a single train/test split. Instead, it is organized around repeated operational cycles that allow topic structure to be tracked over time.
-
-\section{Dataset Handling and Preprocessing}
-The implementation supports more than one dataset profile, and preprocessing is adapted to the active profile. This is an important design decision because topic modeling quality is highly sensitive to noise patterns in the text. A customer-support corpus has different artifacts from a news corpus, and the preprocessing strategy should reflect that.
-
-In the current implementation, preprocessing includes text normalization, noise removal, empty-text filtering, minimum-length filtering, and duplicate removal. The system distinguishes between at least two cleaning styles: one intended for short, noisy support-style messages and one intended for more general text. The support-oriented cleaner removes artifacts such as URLs, user handles, signature fragments, phone-like strings, repeated punctuation, and emoji-heavy noise. The general cleaner removes more generic formatting noise while avoiding support-specific heuristics that might distort cleaner news-like text.
-
-This dataset-aware preprocessing strategy is a practical strength of the project. It acknowledges that topic modeling quality depends not only on the model but also on preserving the right lexical signal. If preprocessing is too weak, the model learns artifacts; if it is too aggressive, it removes semantic distinctions that are useful for topic formation.
-
-A second practical feature is the generation of document identifiers and batch identifiers. These identifiers are not only administrative. They link raw documents, topic assignments, dashboard summaries, and drift signals across repeated runs. Without such identifiers, it would be difficult to interpret changes over time or to associate user edits with specific model states.
-
-One important limitation, however, is reproducibility from the uploaded archive alone. The code clearly expects external raw data files for the active datasets, but those full datasets are not bundled with the uploaded materials. As a result, the implementation can be analyzed in depth, but some runs cannot be fully replayed end-to-end without the original data sources.
-
-\section{Primary Model Design: BERTopic as the Operational Core}
-\subsection{Why \bertopic is the base model}
-The project places \bertopic at the center of the system because it is well suited to semantically rich topic discovery on short or moderately noisy texts. Unlike purely count-based topic models, \bertopic begins with sentence embeddings, which allow semantically similar texts to remain close even when they do not share many surface words. Those embeddings are then compressed into a lower-dimensional space, clustered, and converted into interpretable topic descriptors through class-based TF--IDF.
-
-From an implementation perspective, this is a coherent choice for a customer-support or evolving-text setting. Support messages often contain paraphrases, abbreviations, and sparse lexical overlap. A contextual embedding model can help group semantically similar requests that would be fragmented by a purely lexical method.
-
-\subsection{Implemented \bertopic pipeline}
-The implemented \bertopic stack follows the standard four-stage pattern: embedding, dimensionality reduction, clustering, and topic representation.
-\begin{enumerate}[leftmargin=*,itemsep=2pt]
-    \item \textbf{Embedding.} The system uses a sentence-transformer model to produce dense representations of documents.
-    \item \textbf{Dimensionality reduction.} A manifold-learning stage reduces the embedding space to a lower dimension that is more tractable for clustering.
-    \item \textbf{Clustering.} A density-based clustering method groups nearby reduced points while allowing some items to remain unassigned as noise.
-    \item \textbf{Topic representation.} A vectorizer and class-based TF--IDF convert document clusters into interpretable top-word representations.
-\end{enumerate}
-
-In the uploaded implementation, the configuration favors relatively small batch settings: neighborhood and clustering thresholds are permissive, and vocabulary filtering is light. This suggests that the project is tuned for moderate batch sizes where preserving topic granularity is valuable, though it also implies sensitivity to noise and parameter choice.
-
-\subsection{Batch-wise online updating}
-The most important design choice in the project is the way online updating is implemented. The system does not continuously optimize a single mutable topic model in place. Instead, it uses a batch-wise update scheme. For each new window of data, a fresh \bertopic model is trained on the new batch. That batch model is then merged with the currently deployed model, and the merged artifact becomes the new current model.
-
-This design has several advantages. First, it preserves accumulated topic structure from prior batches while still allowing new themes to enter the system. Second, it fits naturally with versioning, because each update produces a distinct model state that can be archived. Third, it integrates well with human-in-the-loop corrections: if topic labels or merges have already been applied to the current model, those edits can be carried forward into the next merged state.
-
-At the same time, this strategy is not equivalent to fully online optimization in a streaming sense. Topic identity may shift across merges, and numerical topic identifiers do not automatically guarantee semantic continuity. Therefore, while the project is rightly described as ``online'' in the sense of recurring model updates, it is more precisely a \emph{batch-recurring online monitoring system}.
-
-\subsection{Topic metadata and interpretability}
-An important implementation detail is the generation of explicit topic metadata after modeling. For each non-outlier topic, the system stores topic identifiers, representative words, estimated size, time-window information, and human-readable labels. It can also augment these topic descriptors with short natural-language summaries. This metadata is essential because the dashboard and user interaction layer do not operate directly on raw cluster assignments. They operate on curated topic descriptions that make the system interpretable.
-
-From a project-review standpoint, this is a meaningful strength. Many student implementations stop at producing topic-word lists. This system goes further by constructing a reusable topic catalog that supports inspection, comparison, and editing.
-
-\section{Comparison Models: \lda and \nmf}
-The project includes two benchmark models so that \bertopic is not evaluated in isolation. Both comparison models are implemented in the pipeline and not merely discussed in the documentation.
-
-\subsection{Latent Dirichlet Allocation}
-\lda serves as the probabilistic bag-of-words baseline. It models documents as mixtures of latent topics and topics as distributions over words. In the implemented system, \lda is trained on preprocessed lexical features rather than contextual embeddings. This makes it a useful comparison because it represents a classical topic-modeling approach with strong interpretability, but weaker semantic flexibility on short and noisy text.
-
-The presence of \lda in the implementation matters for two reasons. First, it provides a familiar reference model for academic comparison. Second, it helps show whether the observed quality gains from \bertopic are simply due to more aggressive preprocessing or whether they reflect the value of semantic embeddings and clustering.
-
-\subsection{Non-negative Matrix Factorization}
-\nmf serves as a second lexical baseline. Unlike \lda, which is probabilistic, \nmf factorizes a non-negative document-term matrix into document-topic and topic-word matrices. In practice, \nmf often yields sharp topic-word lists and can behave differently from \lda even when both are trained on the same corpus.
-
-The implementation contains several stability-oriented decisions in the \nmf path. These indicate that the authors encountered practical difficulties when applying matrix factorization to small and sparse short-text batches. The design therefore prioritizes robust training over strict adherence to user-configured penalties. That is an engineering-driven rather than purely theoretical choice, and it is exactly the kind of detail that should be acknowledged in a final report.
-
-\subsection{Interpretation of the three-model comparison}
-Taken together, the three-model setup reflects a sensible hierarchy. \bertopic is used where semantic quality and user-facing interpretability matter most. \lda provides a classical probabilistic comparison. \nmf provides a factorization-based comparison that can reveal different trade-offs in topic sharpness and geometric separation. Because these models operate in different representational spaces, no single metric can declare an absolute winner. Nevertheless, their joint inclusion makes the evaluation more credible than a single-model narrative.
-
-\begin{table}[t]
-\caption{Implemented role of each model in the system}
-\label{tab:model-role}
+\begin{figure}[t]
 \centering
-\footnotesize
-\begin{tabular}{p{0.18\columnwidth} p{0.23\columnwidth} p{0.47\columnwidth}}
-\toprule
-\textbf{Model} & \textbf{Role} & \textbf{Purpose in the system} \\
-\midrule
-\bertopic & Primary model & Topic discovery, online updating, metadata generation, dashboard inspection, inference, and human-guided maintenance \\
-\lda & Baseline 1 & Classical probabilistic benchmark for topic quality comparison \\
-\nmf & Baseline 2 & Matrix-factorization benchmark for complementary comparison of lexical topic structure \\
-\bottomrule
-\end{tabular}
-\end{table}
+\includegraphics[width=0.88\columnwidth,height=0.48\textheight,keepaspectratio]{figures/fig2-image.png}
+\caption{Orchestration strategy for one execution cycle: trigger and windowing, data pipeline, BERTopic train-and-merge, optional baselines, drift monitoring, and persistence for serving (Prefect DAG).}
+\label{fig:orchestration-flow}
+\end{figure}
 
-\section{Drift Monitoring and Human-in-the-Loop Support}
-\subsection{Drift monitoring}
-Because the system is designed for repeated batch updates, monitoring topic stability is a necessary part of the architecture. The implementation therefore includes drift assessment between the current and previous topic model states. The drift logic considers multiple signals rather than relying on a single score. These signals include changes in topic prevalence, movement in topic centroids, divergence in topic keywords, and the appearance or disappearance of topics.
+\subsection{Modeling Layer}
+The modeling layer encapsulates all topic model training, updating, and evaluation logic. It is organized around the role separation described in Section III: \bertopic operates as the primary model for discovery and deployment, while \lda and \nmf serve as comparative baselines.
 
-This multi-signal design is theoretically appropriate. Topic drift can manifest in different ways: a topic may persist but become much more common, a topic may remain common while its semantics shift, or a new topic may emerge entirely. By monitoring several signals, the system avoids reducing drift to one simplistic indicator.
+\subsubsection{BERTopic operational path}
+The \bertopic path implements a four-stage pipeline: (1)~sentence embedding via a pre-trained Sentence-Transformer (\texttt{all-MiniLM-L6-v2}) \cite{sentencetransformers}, (2)~dimensionality reduction via UMAP \cite{umap}, (3)~density-based clustering via HDBSCAN \cite{hdbscan}, and (4)~topic representation via CountVectorizer with class-based TF--IDF \cite{bertopic}. After training, the layer extracts topic metadata (identifiers, top words, sizes, custom labels) and persists document-level topic assignments with confidence scores. Optional LLM-assisted label generation via a local Ollama endpoint can augment topic descriptors with natural-language summaries.
 
-\subsection{Human-in-the-loop topic maintenance}
-The project also supports human-in-the-loop maintenance. In practice, this means the user can inspect topics and intervene when the automatically generated structure is unsatisfactory. The strongest implemented operations are topic relabeling and topic merging. Relabeling improves interpretability by replacing mechanically generated descriptors with analyst-approved names. Merging addresses a common weakness in topic modeling systems: semantically overlapping topics that are distinct numerically but redundant analytically.
+\subsubsection{Online update via train-and-merge}
+When a deployed model $\mathcal{M}_{t-1}$ already exists, the modeling layer does not retrain on all historical data. Instead, it trains a fresh model $\mathcal{F}_t$ on the new batch $\mathcal{B}_t$, then invokes \texttt{BERTopic.merge\_models} with a configurable similarity threshold $\tau$ to produce the updated model $\mathcal{M}_t$. Before merging, the previous model is archived to a versioned directory, enabling rollback. After merging, document assignments are recomputed using the merged model's \texttt{transform} method, and a cumulative corpus file is maintained for fair baseline comparison.
 
-The project also includes audit and version history concepts, which are important in a system with manual intervention. Once users begin changing topic labels or merging topics, the system must preserve a record of what changed and when. That versioning capability makes the human-in-the-loop design materially stronger.
+\subsubsection{Topic metadata and interpretability}
+After each model update, the system extracts explicit topic metadata for every non-outlier topic: identifiers, ranked keywords, document count, time-window provenance, and human-readable labels. Optional LLM-assisted summarization can augment descriptors with natural-language topic names\cite{Azher2024}. This metadata layer is essential because the dashboard, serving, and governance layers operate on curated topic descriptions rather than raw cluster assignments. The result is a reusable topic catalog that supports inspection, comparison, and editing across the full system lifecycle.
 
-A point of caution is that not every desired editing action is equally mature. A topic-splitting interface is present at the system level, but the code indicates that true semantic split functionality is not yet implemented to the same degree as merge and relabel. For an honest final presentation, the system should therefore be described as fully supporting relabeling and merging, with split functionality remaining partial.
+\subsubsection{Baseline comparison path}
+\lda and \nmf are trained on the same cumulative corpus available to the merged \bertopic model. The number of topics is harmonized: by default it matches the number of non-outlier topics discovered by \bertopic, with a configurable minimum. Both baselines record coherence ($C_v$), diversity, and silhouette metrics that are stored alongside \bertopic metrics for the same batch, enabling direct three-way comparison.
 
-% TODO: Insert screenshot of HITL editor or topic management page.
 \begin{figure}[t]
 \centering
 \fbox{\parbox{0.92\columnwidth}{\centering
-\vspace{0.8cm}
-Placeholder for dashboard screenshot showing topic relabeling, topic merge,\\
-or model history / rollback workflow.
-\vspace{0.8cm}}}
-\caption{Suggested visualization for the human-in-the-loop topic maintenance interface.}
+\vspace{0.75cm}
+Placeholder for modeling layer diagram.\\
+Show: BERTopic path (embed $\rightarrow$ UMAP $\rightarrow$ HDBSCAN $\rightarrow$ c-TF-IDF $\rightarrow$ merge)\\
+in parallel with LDA and NMF baseline branches.\\
+Annotate shared corpus, harmonized topic count, and metrics output.
+\vspace{0.75cm}}}
+\caption{Modeling layer: operational BERTopic path and baseline branches.}
+\label{fig:modeling-layer}
+\end{figure}
+
+\subsection{Drift Detection and Monitoring Layer}
+In a batch-recurring system, each model update potentially alters the topic structure. Without explicit monitoring, such changes accumulate silently and may degrade analytical reliability. The drift detection layer addresses this by computing quantitative signals between consecutive deployed model states $\mathcal{M}_{t-1}$ and $\mathcal{M}_t$ immediately after each merge. Rather than reducing drift to a single scalar, the implementation tracks four complementary indicators, each capturing a different manifestation of topic instability.
+
+\subsubsection{Prevalence drift}
+Let $P_t(k)$ denote the normalized prevalence of topic $k$ in model $\mathcal{M}_t$, computed as the fraction of assigned documents. The system measures distributional shift using the Total Variation Distance (TVD):
+\begin{equation}
+\label{eq:tvd}
+    \mathrm{TVD}(P_t, P_{t-1}) = \frac{1}{2}\sum_{k \in \mathcal{K}} \lvert P_t(k) - P_{t-1}(k) \rvert
+\end{equation}
+where $\mathcal{K}$ is the union of all non-outlier topic identifiers across both models. Topics absent from one model are assigned zero prevalence. A high TVD indicates that the relative importance of topics has changed substantially between windows.
+
+\subsubsection{Centroid shift in embedding space}
+For each topic $k$ present in both $\mathcal{M}_{t-1}$ and $\mathcal{M}_t$, the system computes the mean embedding vector (centroid) of all documents assigned to $k$ in each window. The centroid shift is defined as:
+\begin{equation}
+\label{eq:centroid}
+    \Delta_k = 1 - \frac{\mathbf{c}_t^{(k)} \cdot \mathbf{c}_{t-1}^{(k)}}{\lVert \mathbf{c}_t^{(k)} \rVert \; \lVert \mathbf{c}_{t-1}^{(k)} \rVert}
+\end{equation}
+where $\mathbf{c}_t^{(k)}$ is the centroid of topic $k$ in the embedding space of model $\mathcal{M}_t$. A value of $\Delta_k \approx 0$ indicates semantic stability; values approaching 1 indicate that the topic's meaning has shifted despite retaining the same identifier.
+
+\subsubsection{Keyword divergence}
+For each topic $k$, the system constructs a probability distribution over the union vocabulary of its top keywords in $\mathcal{M}_{t-1}$ and $\mathcal{M}_t$ by normalizing the c-TF-IDF weights. The divergence between these distributions is measured using the Jensen--Shannon divergence:
+\begin{equation}
+\label{eq:js}
+    \mathrm{JSD}(Q_t^{(k)} \| Q_{t-1}^{(k)}) = \frac{1}{2}\,\mathrm{KL}(Q_t^{(k)} \| M) + \frac{1}{2}\,\mathrm{KL}(Q_{t-1}^{(k)} \| M)
+\end{equation}
+where $M = \frac{1}{2}(Q_t^{(k)} + Q_{t-1}^{(k)})$ and $\mathrm{KL}(\cdot\|\cdot)$ denotes the Kullback--Leibler divergence. JSD is bounded in $[0, 1]$ and symmetric, making it suitable for comparing distributions that may have non-overlapping support.
+
+\subsubsection{Topic lifecycle events}
+Beyond continuous metrics, the system detects structural changes by computing set differences between the topic identifier sets of consecutive models:
+\begin{equation}
+\label{eq:lifecycle}
+    \mathcal{K}_{\mathrm{new}} = \mathcal{K}_t \setminus \mathcal{K}_{t-1}, \qquad
+    \mathcal{K}_{\mathrm{gone}} = \mathcal{K}_{t-1} \setminus \mathcal{K}_t
+\end{equation}
+where $\mathcal{K}_t$ is the set of non-outlier topic identifiers in $\mathcal{M}_t$. A large $|\mathcal{K}_{\mathrm{new}}|$ signals topic emergence; a large $|\mathcal{K}_{\mathrm{gone}}|$ signals topic disappearance. Both are indicative of significant structural reorganization.
+
+\subsubsection{Alert generation and severity}
+Each drift signal is compared against configurable thresholds organized into three severity tiers (low, medium, high). When a signal exceeds its threshold, a timestamped alert is generated and persisted. Alerts carry topic-level granularity for centroid and keyword signals and system-level granularity for prevalence and lifecycle signals. This threshold-based design allows analysts to prioritize inspection effort based on signal severity rather than reviewing all topics after every update.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.92\columnwidth}{\centering
+\vspace{0.75cm}
+Placeholder for drift detection flow diagram.\\
+Show: Load $\mathcal{M}_{t-1}$ and $\mathcal{M}_t$ $\rightarrow$ Prevalence TVD\\
+$\rightarrow$ Centroid Shift $\rightarrow$ Keyword JSD $\rightarrow$ Topic Birth/Death\\
+$\rightarrow$ Threshold Comparison $\rightarrow$ Alert Generation $\rightarrow$ Persist Alerts.
+\vspace{0.75cm}}}
+\caption{Drift detection pipeline: four signals computed between consecutive model states.}
+\label{fig:drift-pipeline}
+\end{figure}
+
+\subsection{Human-in-the-Loop Governance Layer}
+Automated topic modeling produces topic structures that are statistically derived but not always analytically satisfactory. The governance layer addresses this by enabling analyst-driven interventions that are version-controlled and auditable, forming a feedback path from the interaction layer back into the deployed model state.
+
+\subsubsection{Relabeling}
+Topic relabeling allows an analyst to replace an automatically generated descriptor with a human-approved label. The operation modifies both the in-memory model and the persisted metadata, ensuring consistency between the deployed model and the dashboard. Each relabel action is recorded in an append-only audit log with a timestamp and optional analyst note.
+
+\subsubsection{Topic merging}
+When two or more topics are semantically redundant, an analyst can merge them into a single consolidated topic. The implementation invokes the model's merge operation on the full cumulative corpus, re-derives topic representations, and saves the updated model. The previous model state is archived before the merge, enabling rollback if the consolidation proves undesirable.
+
+\subsubsection{Version history and rollback}
+Every governance mutation (relabel, merge) and every pipeline-driven model update produces a versioned archive of the prior model state. The version history endpoint exposes a chronological list of archived checkpoints with metadata describing the action that produced each version. Rollback restores a selected archived checkpoint as the current deployed model. This mechanism provides a safety net that is essential in any system where human edits and automated updates coexist.
+
+\subsubsection{Implementation maturity}
+Topic splitting is exposed as an API endpoint but does not yet implement full semantic re-clustering. In its current form, the split interface records the analyst's intent and archives metadata, but it does not automatically discover coherent sub-topics within the source topic. This limitation is acknowledged as a validity boundary.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.92\columnwidth}{\centering
+\vspace{0.75cm}
+Placeholder for HITL governance diagram or screenshot.\\
+Show: Relabel / Merge operations $\rightarrow$ model re-save $\rightarrow$\\
+version archive $\rightarrow$ audit log entry $\rightarrow$ next merge cycle.
+\vspace{0.75cm}}}
+\caption{Human-in-the-loop governance workflow within the architecture.}
 \label{fig:hitl}
 \end{figure}
 
-\section{Dashboard and User-Facing Analytics}
-A notable strength of the project is that the learned topics are not treated as hidden backend artifacts. The dashboard exposes them through multiple analytical views, allowing a reviewer or analyst to move from a high-level summary to fine-grained topic inspection.
+\subsection{Complete Pipeline Algorithm}
+Figure~\ref{fig:algorithm} consolidates the full system behavior for a single execution cycle into a unified pseudocode representation. The algorithm integrates ingestion, the seed-or-merge modeling decision, baseline comparison, drift computation with explicit references to the formal metrics defined in Eqs.~(\ref{eq:tvd})--(\ref{eq:lifecycle}), alert generation, and state persistence.
 
-The main dashboard supports at least four important kinds of user-facing analysis. First, it shows the current topic catalog, which makes the active semantic structure of the corpus visible. Second, it provides batch-level or temporal summaries, allowing the user to see how the distribution of topics changes over time. Third, it exposes alerts and drift-related information, connecting model updates to monitoring logic. Fourth, it allows direct inference on unseen text, demonstrating that the deployed \bertopic model is not only a training artifact but also a serving component.
-
-The benchmarking view is especially important in an academic setting because it connects the deployed model to comparative evaluation. Rather than only visualizing the primary model, the system surfaces coherence, diversity, and silhouette-style metrics across \bertopic, \lda, and \nmf. This makes the project easier to defend because the modeling choice is supported by evidence rather than by preference alone.
-
-\section{Experimental Evidence and Benchmark Interpretation}
-The uploaded code clearly implements the infrastructure required to compute benchmark histories for \bertopic, \lda, and \nmf. However, the uploaded archive does not include all raw data and generated outputs required to rerun every experiment directly from scratch. For that reason, the report separates \emph{implementation evidence} from \emph{run evidence}. Implementation evidence comes from the source code itself. Run evidence comes from the result image supplied separately by the user.
-
-The supplied benchmark image corresponds to a Twitter dataset experiment and reports batch-wise values for coherence, diversity, silhouette score, and topic count across the three models. The average values visible in that image are summarized in Table~\ref{tab:twitter-results}.
-
-\begin{table}[t]
-\caption{Average benchmark values transcribed from the user-supplied Twitter results image}
-\label{tab:twitter-results}
+\begin{figure}[t]
 \centering
-\footnotesize
-\begin{tabular}{lccc}
-\toprule
-\textbf{Model} & \textbf{Coherence} & \textbf{Diversity} & \textbf{Silhouette} \\
-\midrule
-\bertopic & 0.8126 & 0.9010 & 0.0348 \\
-\lda & 0.6503 & 0.2768 & 0.0029 \\
-\nmf & 0.4003 & 0.4125 & 0.0924 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\fbox{\parbox{0.95\columnwidth}{\footnotesize\ttfamily
+\textbf{Algorithm~1}: Batch-Recurring Online Topic Monitoring\\[2pt]
+\textbf{Input}: time window $[t_s, t_e)$, config $C$\\
+\textbf{Output}: updated model $\mathcal{M}_t$, metrics, alerts\\[4pt]
+1.\enspace $\mathcal{B}_t \leftarrow$ \textrm{Ingest and preprocess documents in} $[t_s, t_e)$\\
+2.\enspace \textbf{if} $\mathcal{M}_{t-1}$ \textrm{exists} \textbf{then}\\
+3.\enspace \quad $\mathcal{F}_t \leftarrow$ \textrm{Train fresh BERTopic on} $\mathcal{B}_t$\\
+4.\enspace \quad $\mathcal{M}_t \leftarrow$ \textrm{merge\_models}$(\mathcal{M}_{t-1},\;\mathcal{F}_t,\;\tau)$\\
+5.\enspace \quad \textrm{Archive} $\mathcal{M}_{t-1}$ \textrm{to versioned storage}\\
+6.\enspace \textbf{else}\\
+7.\enspace \quad $\mathcal{M}_t \leftarrow$ \textrm{Seed-train BERTopic on} $\mathcal{B}_t$\\
+8.\enspace \textbf{end if}\\
+9.\enspace \textrm{Compute topic metadata and document assignments}\\
+10. \textrm{Append} $\mathcal{B}_t$ \textrm{to cumulative corpus}\\
+11. \textbf{if} \textrm{LDA enabled} \textbf{then} \textrm{Train LDA; record metrics}\\
+12. \textbf{if} \textrm{NMF enabled} \textbf{then} \textrm{Train NMF; record metrics}\\
+13. \textbf{if} $\mathcal{M}_{t-1}$ \textrm{exists} \textbf{then}\\
+14. \quad \textrm{Compute prevalence TVD via Eq.\,(\ref{eq:tvd})}\\
+15. \quad \textrm{Compute centroid shift} $\Delta_k$ \textrm{via Eq.\,(\ref{eq:centroid})} $\forall\,k$\\
+16. \quad \textrm{Compute keyword JSD via Eq.\,(\ref{eq:js})} $\forall\,k$\\
+17. \quad \textrm{Compute} $\mathcal{K}_{\textrm{new}},\;\mathcal{K}_{\textrm{gone}}$ \textrm{via Eq.\,(\ref{eq:lifecycle})}\\
+18. \quad \textrm{Generate severity-graded drift alerts}\\
+19. \textbf{end if}\\
+20. \textrm{Log all metrics to MLflow; update processing state}\\
+21. \textrm{Expose results via API for dashboard consumption}
+}}
+\caption{Complete pipeline algorithm for one execution cycle. Drift steps (lines 14--17) reference the formal definitions in Section~IV-D.}
+\label{fig:algorithm}
+\end{figure}
 
-Several careful observations can be made from these results. First, \bertopic shows the strongest coherence and diversity in the provided experiment. This is consistent with the design of the implementation, which uses contextual embeddings and semantic clustering before deriving interpretable top-word labels. Second, \lda performs substantially worse than \bertopic on both coherence and diversity, which is plausible for short, noisy text where lexical overlap is sparse. Third, \nmf achieves the highest silhouette score in the supplied table, suggesting stronger separation in its feature space even though its topic quality appears weaker than \bertopic according to coherence and diversity.
+\subsection{Serving Layer}
+In a conventional research prototype, model outputs are consumed directly within the same process that produced them. This tight coupling limits reusability and makes it difficult to separate analytical concerns from training logic. The present system addresses this limitation by introducing a dedicated serving layer that mediates all access to model outputs, evaluation metrics, drift signals, and governance operations through a stateless RESTful API.
 
-These results should be interpreted with methodological caution. Silhouette scores are not perfectly symmetric across the three model families because each model assigns topics from a different representational space. Therefore, the strongest evidence in this comparison comes from the joint pattern rather than any one metric in isolation: \bertopic appears to provide the best balance of interpretability-oriented quality measures, while \nmf may produce sharper partitioning in its lexical factorization space.
+The API is implemented in FastAPI and organized into versioned resource groups that collectively cover six functional domains: topic catalog retrieval, temporal trend queries, drift alert access, single-document inference against the deployed \bertopic model, human-in-the-loop mutation operations (relabeling, merging, rollback), and per-model evaluation metric histories for \bertopic, \lda, and \nmf. Each resource group returns structured JSON responses, enabling downstream consumers to be implemented independently of the modeling codebase.
 
-% TODO: Insert screenshot or recreated plot of the benchmarking page here.
+A significant architectural benefit of this design is \emph{consumer independence}. The dashboard, described in the following subsection, communicates with the serving layer exclusively through HTTP requests. However, the same API contracts are equally available to external scripts, automated monitoring agents, or alternative front-end applications. This decoupling also simplifies deployment: the backend and frontend are packaged as separate Docker containers orchestrated through Docker Compose, permitting independent scaling and lifecycle management.
+
 \begin{figure}[t]
 \centering
 \fbox{\parbox{0.92\columnwidth}{\centering
-\vspace{0.8cm}
-Placeholder for benchmark chart or screenshot of BERTopic vs. LDA vs. NMF comparison.
-\vspace{0.8cm}}}
-\caption{Suggested figure for comparative model benchmarking across batches.}
-\label{fig:benchmark}
+\vspace{0.75cm}
+Placeholder for serving layer diagram.\\
+Show: FastAPI backend with functional resource groups\\
+(topics, trends, alerts, inference, HITL, metrics)\\
+serving the Streamlit dashboard and potential external consumers.
+\vspace{0.75cm}}}
+\caption{Serving layer: RESTful API mediating access between modeling outputs and consumer applications.}
+\label{fig:serving-layer}
 \end{figure}
+
+\subsection{Interaction Layer}
+The interaction layer is a multi-page Streamlit dashboard that provides analyst-facing views over the system's outputs. Each page corresponds to a distinct analytical concern:
+
+\begin{enumerate}[leftmargin=*,itemsep=1pt]
+    \item \textbf{Project Overview} --- system description, active dataset, and configuration summary.
+    \item \textbf{Dashboard} --- current topic catalog with sizes, labels, and top-word lists.
+    \item \textbf{Topic Drilldown} --- detailed inspection of individual topics, representative documents, and temporal prevalence.
+    \item \textbf{Drift Alerts} --- active and historical drift signals with severity and metric detail.
+    \item \textbf{HITL Editor} --- topic relabeling, merging, version history, and rollback controls.
+    \item \textbf{Inference} --- free-text input for real-time topic prediction using the deployed model.
+    \item \textbf{Model Benchmarking} --- side-by-side comparison of \bertopic, \lda, and \nmf metrics across batches.
+\end{enumerate}
+
+The dashboard communicates exclusively with the serving layer through HTTP requests to the FastAPI backend. This separation ensures that no modeling or storage logic is embedded in the front-end, which improves maintainability and permits the API to serve additional consumers (e.g., automated alerting scripts or external dashboards) without modification.
+
+\begin{figure}[t]
+\centering
+\fbox{\parbox{0.92\columnwidth}{\centering
+\vspace{0.75cm}
+Placeholder for dashboard screenshot collage or wireframe.\\
+Show key pages: Dashboard overview, Topic Drilldown, Drift Alerts,\\
+HITL Editor, Inference, and Model Benchmarking.
+\vspace{0.75cm}}}
+\caption{Interaction layer: Streamlit dashboard pages.}
+\label{fig:dashboard-pages}
+\end{figure}
+
+\subsection{Persistence and Data Flow}
+Across all layers, persistence is managed through a shared file-system store organized by dataset name. Key artifacts include: processed Parquet files per batch, serialized \bertopic model checkpoints (current and previous), cumulative corpus JSON, topic metadata JSON, document assignment CSVs, drift alert CSVs, \hitl audit logs, and per-model metric histories. MLflow additionally maintains a parallel experiment-tracking store for cross-run comparison.
+
+Data flows unidirectionally from ingestion through modeling to serving and interaction, with the exception of \hitl write-back operations (relabel, merge, rollback), which modify the deployed model and its metadata before the next pipeline cycle incorporates those changes through the merge process.
+
+\section{Experimental Evaluation}
+\subsection{Datasets}
+\textbf{Twitter customer-support conversations.} We use a large-scale public corpus of Twitter-based customer support interactions (on the order of $2.8\times10^6$ raw records). The subset used for modeling focuses on short, user-originated messages after standard quality filters; the effective document count is substantially smaller than the raw table but remains in the millions-to-hundreds-of-thousands range depending on filtering. The text is inherently noisy: informal language, mentions, URLs, and heterogeneous brands in one stream. This domain is significant for topic modeling because lexical overlap is weak and paraphrase is common, which stresses semantic encoders more than clean newswire. Temporal batching uses strictly ordered timestamps where needed so window-based pipelines are well defined.
+
+\textbf{AG News.} We additionally use the AG News collection: approximately $1.27\times10^5$ articles when standard train and test splits are combined, balanced across four high-level categories (world, sports, business, science and technology). Articles are longer and syntactically cleaner than social text, providing a complementary regime to test whether topic quality and model rankings transfer to traditional news-style language with stronger topical cues.
+
+Quantitative benchmarks summarize five consecutive windows on each corpus, transcribed from the current project benchmark export.
+
+\subsection{Preprocessing}
+Preprocessing is profile-specific prior to ingestion into the pipeline. Support-style text uses aggressive noise removal (handles, URLs, boilerplate, punctuation clutter); news-style text uses lighter normalization to preserve headline and body phrasing. Empty and duplicate documents are dropped; minimum length thresholds reduce degenerate inputs. Document and batch identifiers are emitted for alignment with assignments, drift logs, and dashboard views. Raw corpora may not accompany the repository snapshot; evaluation assumes locally provisioned data as in deployment configuration.
+
+\subsection{Results}
+All models are evaluated under a common procedure: we report $C_v$ coherence, top-term diversity, and silhouette computed in each model's native representation (silhouette is interpreted qualitatively across families). Topic count $K$ is recorded per window for \bertopic and for baselines when aligned. \lda and \nmf use the same cumulative corpus as \bertopic and, in automatic mode, the same $K$ as non-outlier \bertopic topics as batches accrue. Batch identifiers and MLflow logs hold parameters, metrics, and timings for reproducibility.
+
+\begin{table*}[t]
+\caption{Per-batch topic metrics for Twitter support (top) and AG News (bottom). $K$ is the \bertopic topic count; under each model, columns are $C_v$ (coherence), D (diversity), and S (silhouette).}
+\label{tab:bench-batches}
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{@{}l@{\quad}l@{\;}r@{\;}rrr@{\;}rrr@{\;}rrr@{}}
+\toprule
+ & \textbf{Window} & $K$ & \multicolumn{3}{c}{\bertopic} & \multicolumn{3}{c}{\lda} & \multicolumn{3}{c}{\nmf} \\
+\cmidrule(lr){4-6} \cmidrule(lr){7-9} \cmidrule(lr){10-12}
+ &  &  & $C_v$ & D & S & $C_v$ & D & S & $C_v$ & D & S \\
+\midrule
+\multirow{6}{*}{\shortstack{Twitter\\[-1pt]support}}
+  & 0010--15 & 35  & .844 & .951 & .075  & .653 & .209 & .042  & .381 & .305 & .226 \\
+  & 0015--20 & 43  & .760 & .911 & .020  & .658 & .342 & $-.001$  & .407 & .363 & .129 \\
+  & 0020--25 & 68  & .837 & .899 & .040  & .623 & .268 & $-.003$  & .403 & .410 & .048 \\
+  & 0025--30 & 77  & .853 & .877 & .033  & .677 & .286 & $-.016$  & .403 & .461 & .041 \\
+  & 0030--35 & 81  & .769 & .867 & .006  & .639 & .280 & $-.008$  & .407 & .524 & .018 \\
+  & \textbf{Mean} & --- & .8126 & .9010 & .0348 & .6503 & .2768 & .0029 & .4003 & .4125 & .0924 \\
+\midrule
+\multirow{6}{*}{AG News}
+  & 0025--30 & 45  & .863 & .960 & .212  & .485 & .500 & .021  & .568 & .531 & .146 \\
+  & 0030--35 & 71  & .797 & .913 & .224  & .451 & .569 & .054  & .684 & .687 & .127 \\
+  & 0035--40 & 75  & .868 & .876 & .179  & .550 & .607 & .020  & .742 & .792 & .143 \\
+  & 0040--45 & 84  & .838 & .850 & .209  & .503 & .631 & .012  & .770 & .825 & .111 \\
+  & 0045--50 & 100 & .818 & .815 & .140  & .565 & .566 & .019  & .780 & .816 & .098 \\
+  & \textbf{Mean} & --- & .8367 & .8828 & .1929 & .5109 & .5745 & .0252 & .7086 & .7303 & .1250 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Table~\ref{tab:bench-batches} gives batch-level scores; the last row of each block is the mean over its five windows. Aggregating those means, \bertopic achieves the strongest $C_v$ and diversity on both corpora; \nmf attains the highest mean silhouette on Twitter but lower $C_v$ than \bertopic there, and on AG News ranks second on $C_v$ without surpassing \bertopic. \lda shows the weakest mean $C_v$ in both regimes but higher diversity on AG News than on Twitter. In the first Twitter window only, \nmf used $K{=}21$ while \bertopic and \lda used $K{=}35$; later windows align $K$, and a stricter study would re-run mismatched cases under common $K$. Overall, the evidence supports \bertopic as the deployed model, with the caveat that silhouette must not substitute for coherence when rankings disagree. Negative \lda silhouette on some Twitter windows indicates weak separation in that representation for those batches.
 
 \section{Implementation Strengths}
 The project has several strengths that are especially relevant in a final review.
@@ -331,8 +413,7 @@ The implementation makes several sound design choices. It uses \bertopic as the 
 At the same time, the system is best described precisely: it is a batch-wise online monitoring system, not a continuously streaming learner; it supports mature relabel and merge operations, but split remains partial; and its results are partly demonstrated through external run artifacts because the uploaded package is not fully self-contained. Presenting the project in this way is not a weakness. On the contrary, it shows technical maturity, because the implementation is explained in terms of what it truly does.
 
 \section*{Acknowledgment}
-% TODO: Replace with project/course acknowledgments if desired.
-The author may add course, instructor, or team acknowledgments here.
+The author gratefully acknowledges Prof.~Baris Aksanli (\url{baksanli@sdsu.edu}), graduate advisor, for sustained support on this project, including guidance on the overall definition and scope of the work, critical feedback during result validation, and practical help with system testing.
 
 \begin{thebibliography}{99}
 
@@ -359,6 +440,12 @@ Prefect Technologies, ``Prefect documentation,'' [Online]. Available: \url{https
 
 \bibitem{mlflow}
 M. Zaharia \emph{et al.}, ``Accelerating the machine learning lifecycle with MLflow,'' \emph{IEEE Data Engineering Bulletin}, vol. 41, no. 4, pp. 39--45, 2018.
+
+\bibitem{Azher2024}
+I. Al Azher, V. D. R. Seethi, A. P. Akella, and H. Alhoori, ``LimTopic: LLM-based Topic Modeling and Text Summarization for Analyzing Scientific Articles limitations,'' in \emph{Proc. 24th ACM/IEEE Joint Conf. Digital Libraries (JCDL)}, Dec. 2024, pp. 1--12, doi: \url{10.1145/3677389.3702605}.
+
+\bibitem{Pavithra2024TopicMF}
+Pavithra and Savitha, ``Topic Modeling for Evolving Textual Data Using LDA, HDP, NMF, BERTOPIC, and DTM With a Focus on Research Papers,'' \emph{Journal of Technology and Informatics (JoTI)}, 2024. [Online]. Available: \url{https://api.semanticscholar.org/CorpusID:269722938}
 
 \end{thebibliography}
 
