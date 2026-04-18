@@ -1,4 +1,5 @@
 """Configuration management for Topic Modeling system."""
+import os
 import yaml
 from pathlib import Path
 from typing import Dict, Any
@@ -160,6 +161,34 @@ class Config:
     nmf: NMFConfig = None  # Optional NMF config
 
 
+def _apply_environment_overrides(cfg: Config) -> Config:
+    """
+    Apply optional environment variable overrides for runtime deployments.
+
+    This keeps local file-based configuration as the default while allowing
+    Docker/CI environments to set connectivity and dataset selection safely.
+    """
+    cfg.active_dataset = os.getenv("ACTIVE_DATASET", cfg.active_dataset)
+
+    # API service overrides
+    cfg.api.host = os.getenv("API_HOST", cfg.api.host)
+    cfg.api.port = int(os.getenv("API_PORT", cfg.api.port))
+
+    # Dashboard service overrides
+    cfg.dashboard.host = os.getenv("DASHBOARD_HOST", cfg.dashboard.host)
+    cfg.dashboard.port = int(os.getenv("DASHBOARD_PORT", cfg.dashboard.port))
+    cfg.dashboard.api_base_url = os.getenv(
+        "API_BASE_URL",
+        os.getenv("DASHBOARD_API_BASE_URL", cfg.dashboard.api_base_url),
+    )
+
+    # Optional local-LLM endpoint overrides
+    cfg.ollama.base_url = os.getenv("OLLAMA_BASE_URL", cfg.ollama.base_url)
+    cfg.ollama.model = os.getenv("OLLAMA_MODEL", cfg.ollama.model)
+
+    return cfg
+
+
 def load_config(config_path: str = "config/config.yaml") -> Config:
     """
     Load configuration from YAML file.
@@ -198,7 +227,7 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
     mlflow_dict = _interpolate(config_dict['mlflow'])
     data_dict = _interpolate(config_dict['data'])
 
-    return Config(
+    cfg = Config(
         active_dataset=active,
         dataset=ds_profile,
         data=DataConfig(**data_dict),
@@ -213,6 +242,7 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
         lda=LDAConfig(**config_dict.get('lda', {})) if 'lda' in config_dict else None,
         nmf=NMFConfig(**config_dict.get('nmf', {})) if 'nmf' in config_dict else None
     )
+    return _apply_environment_overrides(cfg)
 
 
 def load_drift_thresholds(config_path: str = "config/drift_thresholds.yaml") -> Dict[str, Any]:

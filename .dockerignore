@@ -1,0 +1,20 @@
+.git
+.gitignore
+.vscode
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+.DS_Store
+
+# Runtime artifacts
+logs
+mlruns
+outputs
+models
+data
+report
+all.md
+
