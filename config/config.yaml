@@ -1,6 +1,6 @@
 # ── Switch dataset by changing this single value ──────────────
 # Supported: "twitter" | "ag_news"
-active_dataset: "twitter"
+active_dataset: "ag_news"
 
 # ── Per-dataset profiles ──────────────────────────────────────
 datasets:
